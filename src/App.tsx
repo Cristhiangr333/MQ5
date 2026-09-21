@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { WORLDS, generateQuestionsForWorld } from './data/worldsData';
 import { WorldDefinition, PlayerStats, GameSessionState } from './types';
 import { playSfx, toggleAudioMute, getIsMuted } from './utils/audio';
-import { ThreeWorldCanvas } from './components/ThreeWorldCanvas';
+import { WorldViewport } from './components/WorldViewport';
 import { GameHUD } from './components/GameHUD';
 import { QuestionPanel } from './components/QuestionPanel';
 import { WorldCardStrip } from './components/WorldCardStrip';
@@ -12,7 +12,7 @@ import { Play, Compass, Sparkles, BookOpen, Volume2, Shield } from 'lucide-react
 
 const QUESTIONS_PER_WORLD = 5;
 const MAX_LIVES = 3;
-const TIME_PER_QUESTION_MS = 6500;
+const TIME_PER_QUESTION_MS = 8000;
 
 export default function App() {
   const [viewMode, setViewMode] = useState<'map' | 'game'>('game');
@@ -68,7 +68,7 @@ export default function App() {
     };
   });
 
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   const currentWorld: WorldDefinition =
     WORLDS.find((w) => w.id === currentWorldId) || WORLDS[0];
@@ -117,17 +117,27 @@ export default function App() {
       let newEnemyHp = session.enemyHp;
       let newBridge = session.bridgeBuiltSegments;
       let newClues = session.cluesFound;
+      let newRaceProgress = session.raceProgress;
+      let newShopCartTotal = session.shopCartTotal;
 
       if (correct) {
-        if (currentWorld.mode === 'battle') {
+        if (currentWorld.mode === 'race') {
+          // Advance on track by 20%
+          newRaceProgress = Math.min(100, (session.raceProgress || 0) + 20);
+        } else if (currentWorld.mode === 'battle') {
           newEnemyHp = Math.max(0, session.enemyHp - 25);
+        } else if (currentWorld.mode === 'shop') {
+          newShopCartTotal = (session.shopCartTotal || 0) + 1;
         } else if (currentWorld.mode === 'bridge') {
           newBridge = Math.min(QUESTIONS_PER_WORLD, session.bridgeBuiltSegments + 1);
         } else if (currentWorld.mode === 'detective') {
           newClues = Math.min(5, session.cluesFound + 1);
         }
       } else {
-        if (currentWorld.mode === 'battle') {
+        if (currentWorld.mode === 'race') {
+          // Retroceder de verdad si pierde: retrocede 14%
+          newRaceProgress = Math.max(0, (session.raceProgress || 0) - 14);
+        } else if (currentWorld.mode === 'battle') {
           newHeroHp = Math.max(0, session.heroHp - 20);
         }
       }
@@ -197,10 +207,12 @@ export default function App() {
         isCorrect: correct,
         isTimerActive: false,
         feedbackText: feedback,
+        raceProgress: newRaceProgress,
         heroHp: newHeroHp,
         enemyHp: newEnemyHp,
         bridgeBuiltSegments: newBridge,
         cluesFound: newClues,
+        shopCartTotal: newShopCartTotal,
       }));
 
       // Check next question or endgame
@@ -280,6 +292,9 @@ export default function App() {
         setViewMode((v) => (v === 'map' ? 'game' : 'map'));
       } else if (e.key === 's' || e.key === 'S') {
         setIsMuted(toggleAudioMute());
+      } else if (e.key === 'v' || e.key === 'V') {
+        const btn = document.getElementById('engine-toggle-btn');
+        if (btn) btn.click();
       } else if (['1', '2', '3'].includes(e.key) && viewMode === 'game' && !session.isAnswered) {
         const idx = parseInt(e.key) - 1;
         const q = session.questions[session.activeQuestionIndex];
@@ -322,9 +337,9 @@ export default function App() {
           onResetGame={() => initWorldSession(currentWorldId)}
         />
 
-        {/* 3D WebGL Scene */}
+        {/* World Viewport (Dual-Engine: 3D WebGL / Modo Ilustrado Fiel) */}
         <section className="relative w-full">
-          <ThreeWorldCanvas
+          <WorldViewport
             viewMode={viewMode}
             currentWorldId={currentWorldId}
             gameMode={currentWorld.mode}
@@ -334,23 +349,17 @@ export default function App() {
             heroHp={session.heroHp}
             enemyHp={session.enemyHp}
             bridgeBuiltSegments={session.bridgeBuiltSegments}
+            raceProgress={session.raceProgress}
+            shopCartTotal={session.shopCartTotal}
+            cluesFound={session.cluesFound}
+            combo={stats.combo}
+            activeQuestion={activeQuestion}
             onSelectWorld={(id) => {
               playSfx('click');
               initWorldSession(id);
             }}
+            onToggleViewMode={() => setViewMode((v) => (v === 'map' ? 'game' : 'map'))}
           />
-
-          {/* Quick World Switcher Floating Badge */}
-          <div className="absolute top-3 right-3 z-10 flex items-center gap-1.5 bg-slate-900/80 backdrop-blur-md border border-slate-700/80 px-3 py-1.5 rounded-full text-xs font-bold text-slate-200 shadow-lg">
-            <span>{currentWorld.icon}</span>
-            <span className="hidden sm:inline">{currentWorld.name}</span>
-            <button
-              onClick={() => setViewMode((v) => (v === 'map' ? 'game' : 'map'))}
-              className="ml-1 text-[11px] text-blue-400 hover:text-blue-300 underline font-mono"
-            >
-              {viewMode === 'map' ? 'Volver al Juego' : 'Ver Mapa 3D'}
-            </button>
-          </div>
         </section>
 
         {/* Dynamic Lower Area: Either Question Panel or World Map Explainer */}

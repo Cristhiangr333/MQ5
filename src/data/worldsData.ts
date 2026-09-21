@@ -11,9 +11,9 @@ export const WORLDS: WorldDefinition[] = [
     accentColor: '#5FCB6D',
     bgGradient: 'from-emerald-900/60 to-emerald-950/90',
     icon: '🏃',
-    competency: 'Operaciones y cálculo mental ágil',
-    description: 'Acelera por el sendero del bosque respondiendo sumas y series numéricas antes de que expire el tiempo.',
-    targetConcept: 'Adición, decenas y series numéricas',
+    competency: 'Sumas de 1 cifra y patrones rápidos',
+    description: 'Acelera por el sendero del bosque respondiendo sumas de 1 cifra y secuencias antes de que termine el tiempo.',
+    targetConcept: 'Suma de 1 cifra (1 al 9) y patrones simples',
     unlockedByDefault: true,
     requiredXp: 0,
     islandPosition: [-6, 0.5, 3],
@@ -28,9 +28,9 @@ export const WORLDS: WorldDefinition[] = [
     accentColor: '#F2B705',
     bgGradient: 'from-amber-900/60 to-amber-950/90',
     icon: '⚔️',
-    competency: 'Sustracción y resolución de diferencias',
-    description: 'Enfréntate al Guardián de Roca en la arena flotante. Cada resta correcta lanza un golpe crítico certero.',
-    targetConcept: 'Sustracción con reagrupación y cálculo inverso',
+    competency: 'Restas de 1 cifra y diferencias',
+    description: 'Enfréntate al Guardián de Roca en la arena flotante. Cada resta de 1 cifra correcta lanza un golpe al guardián.',
+    targetConcept: 'Resta de 1 cifra (1 al 9) y cálculo de diferencias',
     unlockedByDefault: true,
     requiredXp: 50,
     islandPosition: [-2.5, 1.8, -1.5],
@@ -45,9 +45,9 @@ export const WORLDS: WorldDefinition[] = [
     accentColor: '#A78BFA',
     bgGradient: 'from-purple-900/60 to-purple-950/90',
     icon: '🛒',
-    competency: 'Multiplicación y presupuestos reales',
-    description: 'Calcula costos en el mercado de la ciudad: artículos por cantidad, promociones y vueltos de compras.',
-    targetConcept: 'Tablas de multiplicar, factores y múltiplos',
+    competency: 'Multiplicaciones básicas de 1 cifra',
+    description: 'Calcula compras en el puesto de Don Mateo con cantidades y precios de 1 cifra.',
+    targetConcept: 'Tablas de multiplicar de 1 cifra (tablas del 2, 3, 4 y 5)',
     unlockedByDefault: false,
     requiredXp: 150,
     islandPosition: [2, 0.8, -3.5],
@@ -62,9 +62,9 @@ export const WORLDS: WorldDefinition[] = [
     accentColor: '#38BDF8',
     bgGradient: 'from-sky-900/60 to-sky-950/90',
     icon: '🌉',
-    competency: 'División y reparto equitativo',
-    description: 'Coloca bloques geométricos para tender un puente sobre el río bravío resolviendo divisiones y fracciones.',
-    targetConcept: 'División exacta, cocientes y partes iguales',
+    competency: 'Reparto y divisiones exactas de 1 cifra',
+    description: 'Coloca bloques geométricos para tender un puente sobre el río resolviendo divisiones sencillas de 1 cifra.',
+    targetConcept: 'Repartos equitativos y divisiones exactas de 1 cifra',
     unlockedByDefault: false,
     requiredXp: 300,
     islandPosition: [5.5, -0.2, 0.5],
@@ -79,9 +79,9 @@ export const WORLDS: WorldDefinition[] = [
     accentColor: '#F472B6',
     bgGradient: 'from-pink-900/60 to-slate-950/90',
     icon: '🕵️',
-    competency: 'Razonamiento lógico y fracciones mixtas',
-    description: 'Desbloquea las 5 runas del torreón resolviendo enigmas matemáticos, fracciones y jerarquía de operaciones.',
-    targetConcept: 'Fracciones equivalentes, incógnitas y problemas combinados',
+    competency: 'Enigmas e incógnitas de 1 cifra',
+    description: 'Desbloquea las 5 runas del torreón descubriendo el número secreto de 1 cifra que falta.',
+    targetConcept: 'Incógnitas de 1 cifra y razonamiento numérico para 3º grado',
     unlockedByDefault: false,
     requiredXp: 500,
     islandPosition: [1.5, 3.2, 4.2],
@@ -100,118 +100,107 @@ export function generateQuestionsForWorld(worldId: string, count = 5): MathQuest
   const questions: MathQuestion[] = [];
 
   for (let i = 0; i < count; i++) {
-    const qId = `${worldId}-${i + 1}-${Date.now()}`;
+    const qId = `${worldId}-${i + 1}-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
 
     switch (worldId) {
       case 'bosque': {
-        // Sumas ágiles y secuencias de grado 5
+        // Sumas de 1 cifra (3º de primaria)
         const type = i % 3;
-        if (type === 0) {
-          const a = randInt(25, 95);
-          const b = randInt(18, 88);
+        if (type === 0 || type === 1) {
+          // Suma de dos números de 1 cifra con resultado exacto
+          // Elegimos 'a' y 'b' de 1 cifra (1 a 8) de modo que el resultado sea de 1 cifra (hasta 9)
+          const sumTarget = randInt(5, 9);
+          const a = randInt(1, sumTarget - 1);
+          const b = sumTarget - a;
           const correct = a + b;
-          const distractors = [correct + 10, correct - 10, correct + 2, correct - 2].filter(v => v !== correct && v > 0);
-          const opts = shuffle([correct, ...distractors.slice(0, 2)]);
+          
+          // Distractores de 1 cifra diferentes
+          const distractors = [correct + 1, correct - 1, correct + 2, correct - 2]
+            .filter((v) => v !== correct && v > 0 && v <= 9);
+          const opts = shuffle([correct, distractors[0] || (correct > 2 ? correct - 2 : correct + 2), distractors[1] || (correct > 1 ? correct - 1 : correct + 1)]);
+
           questions.push({
             id: qId,
             text: `${a} + ${b} = ?`,
-            category: 'Suma de 2 dígitos',
+            category: 'Suma de 1 cifra',
             difficulty: 1,
             options: opts,
             correct,
-            explanation: `Descomponiendo: ${Math.floor(a / 10) * 10} + ${Math.floor(b / 10) * 10} = ${Math.floor(a / 10) * 10 + Math.floor(b / 10) * 10} y ${a % 10} + ${b % 10} = ${a % 10 + b % 10}, dando un total de ${correct}.`,
-          });
-        } else if (type === 1) {
-          const a = randInt(120, 450);
-          const b = randInt(85, 320);
-          const correct = a + b;
-          const opts = shuffle([correct, correct + (randInt(1, 2) === 1 ? 10 : -10), correct + (randInt(1, 2) === 1 ? 100 : -100)]);
-          questions.push({
-            id: qId,
-            text: `${a} + ${b} = ?`,
-            category: 'Suma con centenas',
-            difficulty: 2,
-            options: opts,
-            correct,
-            explanation: `Sumando centenas, decenas y unidades: ${a} + ${b} = ${correct}.`,
+            explanation: `Contando hacia adelante: ${a} más ${b} es igual a ${correct}.`,
           });
         } else {
-          // Serie numérica
-          const step = randInt(4, 9);
-          const start = randInt(12, 30);
+          // Secuencia numérica simple de 1 cifra (paso de 1 o 2)
+          const step = randInt(1, 2);
+          const start = randInt(1, 9 - step * 3);
           const s1 = start;
           const s2 = s1 + step;
           const s3 = s2 + step;
           const correct = s3 + step;
-          const opts = shuffle([correct, correct + step, correct - 2]);
+          const distractors = [correct + step, Math.max(1, correct - step), correct + 1]
+            .filter((v) => v !== correct && v <= 9 && v >= 1);
+          const opts = shuffle([correct, distractors[0] || 9, distractors[1] || 8]);
+
           questions.push({
             id: qId,
             text: `${s1}, ${s2}, ${s3}, ¿__?`,
-            category: 'Patrón de suma creciente',
-            difficulty: 2,
+            category: 'Serie numérica (1 cifra)',
+            difficulty: 1,
             options: opts,
             correct,
-            explanation: `El patrón aumenta de +${step} en cada paso: ${s3} + ${step} = ${correct}.`,
+            explanation: `El patrón suma +${step} en cada paso: ${s3} + ${step} = ${correct}.`,
           });
         }
         break;
       }
 
       case 'montana': {
-        // Resta y cálculo de diferencias
-        const type = i % 2;
-        if (type === 0) {
-          const a = randInt(70, 180);
-          const b = randInt(25, a - 10);
-          const correct = a - b;
-          const opts = shuffle([correct, correct + 10, correct - 8].filter(v => v > 0));
-          questions.push({
-            id: qId,
-            text: `${a} - ${b} = ?`,
-            category: 'Resta directa',
-            difficulty: 2,
-            options: opts.length === 3 ? opts : [correct, correct + 10, correct - 5],
-            correct,
-            explanation: `Comprobación: ${correct} + ${b} = ${a}.`,
-          });
-        } else {
-          const total = randInt(200, 500);
-          const part = randInt(65, 185);
-          const correct = total - part;
-          const opts = shuffle([correct, correct + 12, Math.max(10, correct - 10)]);
-          questions.push({
-            id: qId,
-            text: `${total} - ${part} = ?`,
-            category: 'Sustracción con llevada',
-            difficulty: 3,
-            options: opts,
-            correct,
-            explanation: `Al restar ${part} de ${total} obtenemos exactamente ${correct}.`,
-          });
-        }
+        // Resta de 1 cifra (3º de primaria)
+        // a y b de 1 cifra (1 al 9), con a >= b y resultado de 1 cifra
+        const a = randInt(3, 9);
+        const b = randInt(1, a - 1);
+        const correct = a - b;
+        const distractors = [correct + 1, correct - 1, correct + 2, correct - 2]
+          .filter((v) => v !== correct && v >= 0 && v <= 9);
+        const opts = shuffle([correct, distractors[0] || (correct + 1), distractors[1] || Math.max(0, correct - 1)]);
+
+        questions.push({
+          id: qId,
+          text: `${a} - ${b} = ?`,
+          category: 'Resta de 1 cifra',
+          difficulty: 1,
+          options: opts,
+          correct,
+          explanation: `Si a ${a} le quitas ${b}, te quedan ${correct}. ¡Porque ${correct} + ${b} = ${a}!`,
+        });
         break;
       }
 
       case 'ciudad': {
-        // Multiplicación en contexto de mercado
+        // Multiplicación en el mercado de Don Mateo: factores de 1 cifra y resultado de 1 cifra (o hasta 9)
         const items = [
-          { name: 'Pociones de energía', unit: randInt(6, 12), qty: randInt(4, 8) },
-          { name: 'Cristales mágicos', unit: randInt(12, 25), qty: randInt(3, 6) },
-          { name: 'Escudos de bronce', unit: randInt(15, 30), qty: randInt(2, 5) },
-          { name: 'Manzanas doradas', unit: randInt(7, 9), qty: randInt(6, 9) },
-          { name: 'Pergaminos de hechizo', unit: randInt(8, 14), qty: randInt(5, 7) },
+          { name: 'Manzanas', qty: 3, unit: 2, total: 6 },
+          { name: 'Pociones', qty: 2, unit: 3, total: 6 },
+          { name: 'Galletas', qty: 4, unit: 2, total: 8 },
+          { name: 'Caramelos', qty: 3, unit: 3, total: 9 },
+          { name: 'Panes', qty: 2, unit: 4, total: 8 },
+          { name: 'Jugos', qty: 2, unit: 2, total: 4 },
+          { name: 'Globos', qty: 5, unit: 1, total: 5 },
+          { name: 'Lápices', qty: 3, unit: 2, total: 6 },
         ];
-        const item = items[i % items.length];
-        const correct = item.unit * item.qty;
-        const opts = shuffle([correct, correct + item.unit, correct - item.unit].filter(v => v > 0));
+        const item = items[(i + randInt(0, 2)) % items.length];
+        const correct = item.total;
+        const distractors = [correct + 1, correct - 1, correct + 2, correct - 2]
+          .filter((v) => v !== correct && v > 0 && v <= 10);
+        const opts = shuffle([correct, distractors[0] || (correct + 1), distractors[1] || (correct - 1)]);
+
         questions.push({
           id: qId,
           text: `${item.qty} × $${item.unit} = ?`,
           category: `Compra: ${item.name}`,
-          difficulty: 3,
-          options: opts.length === 3 ? opts : [correct, correct + 10, correct - 10],
+          difficulty: 2,
+          options: opts,
           correct,
-          explanation: `${item.qty} unidades a $${item.unit} cada una dan un precio total de $${correct}.`,
+          explanation: `${item.qty} ${item.name.toLowerCase()} a $${item.unit} cada una es igual a $${correct} en total.`,
           contextData: {
             itemName: item.name,
             unitPrice: item.unit,
@@ -222,74 +211,60 @@ export function generateQuestionsForWorld(worldId: string, count = 5): MathQuest
       }
 
       case 'rio': {
-        // División y reparto de bloques para el puente
-        const divisors = [4, 5, 6, 7, 8, 9];
-        const div = divisors[i % divisors.length];
-        const quot = randInt(4, 12);
-        const dividend = div * quot;
-        const correct = quot;
-        const opts = shuffle([correct, correct + 1, Math.max(1, correct - 2)]);
+        // Repartos y divisiones exactas con números de 1 cifra
+        const divisions = [
+          { text: '6 ÷ 2 = ?', dividend: 6, divisor: 2, correct: 3, context: '6 bloques entre 2 columnas' },
+          { text: '8 ÷ 2 = ?', dividend: 8, divisor: 2, correct: 4, context: '8 piedras entre 2 orillas' },
+          { text: '9 ÷ 3 = ?', dividend: 9, divisor: 3, correct: 3, context: '9 maderos entre 3 secciones' },
+          { text: '6 ÷ 3 = ?', dividend: 6, divisor: 3, correct: 2, context: '6 tablones entre 3 postes' },
+          { text: '8 ÷ 4 = ?', dividend: 8, divisor: 4, correct: 2, context: '8 cuerdas entre 4 amarres' },
+          { text: '4 ÷ 2 = ?', dividend: 4, divisor: 2, correct: 2, context: '4 columnas entre 2 tramos' },
+        ];
+        const div = divisions[i % divisions.length];
+        const correct = div.correct;
+        const distractors = [correct + 1, correct - 1, correct + 2]
+          .filter((v) => v !== correct && v > 0 && v <= 9);
+        const opts = shuffle([correct, distractors[0] || (correct + 1), distractors[1] || (correct - 1)]);
+
         questions.push({
           id: qId,
-          text: `${dividend} ÷ ${div} = ?`,
-          category: 'Reparto de bloques del puente',
-          difficulty: 3,
+          text: div.text,
+          category: 'Reparto de bloques (1 cifra)',
+          difficulty: 2,
           options: opts,
           correct,
-          explanation: `Dividir ${dividend} en ${div} partes iguales da ${correct} bloques por sección, porque ${div} × ${correct} = ${dividend}.`,
+          explanation: `Repartir ${div.dividend} en ${div.divisor} partes iguales da ${correct}, porque ${div.divisor} × ${correct} = ${div.dividend}.`,
         });
         break;
       }
 
       case 'castillo': {
-        // Enigmas de 5to grado: fracciones y operaciones combinadas
-        const type = i % 3;
-        if (type === 0) {
-          // Fracción equivalente
-          const n = randInt(2, 4);
-          const d = randInt(5, 8);
-          const mult = randInt(2, 4);
-          const correctNum = n * mult;
-          const correctDen = d * mult;
-          questions.push({
-            id: qId,
-            text: `¿Fracción equivalente a ${n}/${d}?`,
-            category: 'Fracciones equivalentes',
-            difficulty: 4,
-            options: shuffle([`${correctNum}/${correctDen}`, `${correctNum + 1}/${correctDen}`, `${correctNum}/${correctDen + 2}`]),
-            correct: `${correctNum}/${correctDen}`,
-            explanation: `Multiplicando numerador y denominador por ${mult}: (${n}×${mult})/(${d}×${mult}) = ${correctNum}/${correctDen}.`,
-          });
-        } else if (type === 1) {
-          // Operación combinada (con jerarquía)
-          const a = randInt(3, 6);
-          const b = randInt(4, 8);
-          const c = randInt(10, 25);
-          const correct = a * b + c;
-          questions.push({
-            id: qId,
-            text: `(${a} × ${b}) + ${c} = ?`,
-            category: 'Jerarquía de operaciones',
-            difficulty: 4,
-            options: shuffle([correct, correct - a, correct + 10]),
-            correct,
-            explanation: `Primero resolvemos la multiplicación: ${a} × ${b} = ${a * b}. Luego sumamos ${c}: ${a * b} + ${c} = ${correct}.`,
-          });
-        } else {
-          // Enigma con incógnita
-          const x = randInt(12, 28);
-          const add = randInt(15, 35);
-          const total = x + add;
-          questions.push({
-            id: qId,
-            text: `Enigma: [ ? ] + ${add} = ${total}`,
-            category: 'Ecuación misteriosa',
-            difficulty: 4,
-            options: shuffle([x, x + 5, Math.max(2, x - 4)]),
-            correct: x,
-            explanation: `Despejamos restando: ${total} - ${add} = ${x}.`,
-          });
-        }
+        // Enigmas con incógnitas de 1 cifra para 3º de primaria
+        const mysteries = [
+          { text: '4 + [ ? ] = 7', correct: 3, exp: '¿Cuánto le falta a 4 para llegar a 7? ¡Le faltan 3!' },
+          { text: '[ ? ] + 5 = 8', correct: 3, exp: 'El número misterioso es 3, porque 3 + 5 = 8.' },
+          { text: '9 - [ ? ] = 5', correct: 4, exp: 'A 9 le quitamos 4 para que queden 5.' },
+          { text: '[ ? ] - 3 = 4', correct: 7, exp: 'Empezamos con 7, porque 7 - 3 = 4.' },
+          { text: '2 × [ ? ] = 6', correct: 3, exp: 'En la tabla del 2: 2 × 3 = 6.' },
+          { text: '3 × [ ? ] = 9', correct: 3, exp: 'En la tabla del 3: 3 × 3 = 9.' },
+          { text: '5 + [ ? ] = 9', correct: 4, exp: '5 más 4 es igual a 9.' },
+          { text: '8 - [ ? ] = 6', correct: 2, exp: '8 menos 2 es igual a 6.' },
+        ];
+        const mystery = mysteries[i % mysteries.length];
+        const correct = mystery.correct;
+        const distractors = [correct + 1, correct - 1, correct + 2, correct - 2]
+          .filter((v) => v !== correct && v > 0 && v <= 9);
+        const opts = shuffle([correct, distractors[0] || (correct + 1), distractors[1] || (correct - 1)]);
+
+        questions.push({
+          id: qId,
+          text: mystery.text,
+          category: 'Enigma de 1 cifra',
+          difficulty: 2,
+          options: opts,
+          correct,
+          explanation: mystery.exp,
+        });
         break;
       }
     }

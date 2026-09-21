@@ -1,1 +1,417 @@
 @import "tailwindcss";
+
+@keyframes bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+@keyframes pathScroll {
+  0% { background-position: 0 0; }
+  100% { background-position: 0 56px; }
+}
+
+@keyframes runLegL {
+  0%, 100% { transform: rotate(28deg); }
+  50% { transform: rotate(-28deg); }
+}
+
+@keyframes runLegR {
+  0%, 100% { transform: rotate(-28deg); }
+  50% { transform: rotate(28deg); }
+}
+
+@keyframes armSwingL {
+  0%, 100% { transform: rotate(-32deg); }
+  50% { transform: rotate(32deg); }
+}
+
+@keyframes armSwingR {
+  0%, 100% { transform: rotate(32deg); }
+  50% { transform: rotate(-32deg); }
+}
+
+@keyframes attackHero {
+  0% { transform: translateX(0) scale(1); }
+  35% { transform: translateX(45px) scale(1.15) rotate(6deg); }
+  60% { transform: translateX(50px) scale(1.1) rotate(2deg); }
+  100% { transform: translateX(0) scale(1) rotate(0deg); }
+}
+
+@keyframes attackEnemy {
+  0% { transform: translateX(0) scale(1); }
+  35% { transform: translateX(-40px) scale(1.12) rotate(-6deg); }
+  60% { transform: translateX(-45px) scale(1.08) rotate(-2deg); }
+  100% { transform: translateX(0) scale(1) rotate(0deg); }
+}
+
+@keyframes hitShake {
+  0%, 100% { transform: translateX(0); }
+  15%, 55% { transform: translateX(-8px) rotate(-4deg); }
+  35%, 75% { transform: translateX(8px) rotate(4deg); }
+}
+
+@keyframes floatUp {
+  0% { opacity: 0; transform: translateY(8px) scale(0.85); }
+  25% { opacity: 1; transform: translateY(-16px) scale(1.1); }
+  75% { opacity: 1; transform: translateY(-36px) scale(1.05); }
+  100% { opacity: 0; transform: translateY(-56px) scale(0.95); }
+}
+
+@keyframes speedlinesAnim {
+  0% { opacity: 0.2; transform: translateY(-100%); }
+  50% { opacity: 0.9; }
+  100% { opacity: 0.2; transform: translateY(100%); }
+}
+
+@keyframes coinFly {
+  0% { opacity: 0; transform: translate(0, 0) scale(0.6) rotate(0deg); }
+  30% { opacity: 1; transform: translate(30px, -45px) scale(1.2) rotate(180deg); }
+  70% { opacity: 1; transform: translate(65px, -20px) scale(1) rotate(360deg); }
+  100% { opacity: 0; transform: translate(80px, 15px) scale(0.8) rotate(540deg); }
+}
+
+@keyframes slashArc {
+  0% { opacity: 0; transform: scale(0.4) rotate(-45deg); stroke-dashoffset: 100; }
+  30% { opacity: 1; transform: scale(1.1) rotate(15deg); stroke-dashoffset: 0; }
+  80% { opacity: 0.8; transform: scale(1.25) rotate(35deg); }
+  100% { opacity: 0; transform: scale(1.4) rotate(45deg); }
+}
+
+@keyframes stoneDrop {
+  0% { opacity: 0; transform: translateY(-40px) scale(0.7); }
+  60% { opacity: 1; transform: translateY(4px) scale(1.08); }
+  80% { transform: translateY(-2px) scale(0.98); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes waterFlow {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+@keyframes breathe {
+  0%, 100% { transform: scaleY(1) scaleX(1); }
+  50% { transform: scaleY(1.04) scaleX(0.98); }
+}
+
+@keyframes dustPuff {
+  0% { opacity: 0.8; transform: scale(0.4) translateY(0); }
+  50% { opacity: 0.5; transform: scale(1) translateY(-6px) translateX(-6px); }
+  100% { opacity: 0; transform: scale(1.4) translateY(-12px) translateX(-12px); }
+}
+
+@keyframes shieldGlow {
+  0%, 100% { transform: scale(1); opacity: 0.7; box-shadow: 0 0 10px #38bdf8; }
+  50% { transform: scale(1.08); opacity: 1; box-shadow: 0 0 25px #0284c7; }
+}
+
+@keyframes runeOrbit {
+  0% { transform: rotate(0deg) translateY(-2px); }
+  50% { transform: rotate(180deg) translateY(2px); }
+  100% { transform: rotate(360deg) translateY(-2px); }
+}
+
+.animate-bob {
+  animation: bob 3.4s ease-in-out infinite;
+}
+
+.animate-path-scroll {
+  animation: pathScroll 0.55s linear infinite;
+}
+
+.animate-run-l {
+  animation: runLegL 0.24s ease-in-out infinite;
+  transform-origin: top center;
+}
+
+.animate-run-r {
+  animation: runLegR 0.24s ease-in-out infinite;
+  transform-origin: top center;
+}
+
+.animate-arm-l {
+  animation: armSwingL 0.24s ease-in-out infinite;
+  transform-origin: top center;
+}
+
+.animate-arm-r {
+  animation: armSwingR 0.24s ease-in-out infinite;
+  transform-origin: top center;
+}
+
+.animate-attack-hero {
+  animation: attackHero 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.animate-attack-enemy {
+  animation: attackEnemy 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.animate-hit-shake {
+  animation: hitShake 0.45s ease-in-out;
+}
+
+.animate-float-up {
+  animation: floatUp 0.95s ease-out forwards;
+}
+
+.animate-speedlines {
+  animation: speedlinesAnim 0.35s linear infinite;
+}
+
+.animate-coin-fly {
+  animation: coinFly 0.85s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.animate-slash-arc {
+  animation: slashArc 0.4s ease-out forwards;
+}
+
+.animate-stone-drop {
+  animation: stoneDrop 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.animate-water-flow {
+  animation: waterFlow 3.5s linear infinite;
+}
+
+.animate-breathe {
+  animation: breathe 3s ease-in-out infinite;
+  transform-origin: bottom center;
+}
+
+.animate-dust {
+  animation: dustPuff 0.45s ease-out infinite;
+}
+
+.animate-shield-glow {
+  animation: shieldGlow 1.8s ease-in-out infinite;
+}
+
+.animate-rune-orbit {
+  animation: runeOrbit 8s linear infinite;
+}
+
+@keyframes jumpSlash {
+  0% { transform: translate(0, 0) scale(1) rotate(0deg); }
+  25% { transform: translate(25px, -24px) scale(1.18) rotate(-12deg); }
+  55% { transform: translate(52px, -8px) scale(1.22) rotate(14deg); }
+  75% { transform: translate(30px, -4px) scale(1.08) rotate(4deg); }
+  100% { transform: translate(0, 0) scale(1) rotate(0deg); }
+}
+
+@keyframes fissureShake {
+  0%, 100% { transform: translate(0, 0); }
+  20% { transform: translate(-4px, 3px); }
+  40% { transform: translate(5px, -3px); }
+  60% { transform: translate(-3px, 2px); }
+  80% { transform: translate(2px, -1px); }
+}
+
+@keyframes debrisLeft {
+  0% { opacity: 1; transform: translate(0, 0) scale(1) rotate(0deg); }
+  100% { opacity: 0; transform: translate(-40px, -30px) scale(0.4) rotate(-180deg); }
+}
+
+@keyframes debrisRight {
+  0% { opacity: 1; transform: translate(0, 0) scale(1) rotate(0deg); }
+  100% { opacity: 0; transform: translate(45px, -35px) scale(0.4) rotate(180deg); }
+}
+
+@keyframes scaleBalance {
+  0%, 100% { transform: rotate(0deg); }
+  30% { transform: rotate(-8deg); }
+  70% { transform: rotate(6deg); }
+  85% { transform: rotate(-2deg); }
+}
+
+@keyframes heroLeap {
+  0% { transform: translateY(0) scale(1); }
+  40% { transform: translateY(-22px) scale(1.15) rotate(4deg); }
+  75% { transform: translateY(-4px) scale(0.95); }
+  100% { transform: translateY(0) scale(1); }
+}
+
+@keyframes splashRing {
+  0% { opacity: 0.9; transform: scale(0.2); }
+  60% { opacity: 0.5; transform: scale(1.3); }
+  100% { opacity: 0; transform: scale(2.2); }
+}
+
+@keyframes unlockBeam {
+  0% { opacity: 0; transform: scale(0.8) rotate(0deg); }
+  50% { opacity: 0.9; transform: scale(1.2) rotate(180deg); }
+  100% { opacity: 0; transform: scale(1.5) rotate(360deg); }
+}
+
+@keyframes flagFlutter {
+  0%, 100% { transform: skewY(0deg) scaleX(1); }
+  50% { transform: skewY(-6deg) scaleX(0.94); }
+}
+
+@keyframes ghostPace {
+  0%, 100% { transform: translateX(0); }
+  50% { transform: translateX(-18px); }
+}
+
+.animate-jump-slash {
+  animation: jumpSlash 0.52s cubic-bezier(0.2, 0.9, 0.3, 1.2);
+}
+
+.animate-fissure-shake {
+  animation: fissureShake 0.4s cubic-bezier(0.36, 0.07, 0.19, 0.97);
+}
+
+.animate-debris-l {
+  animation: debrisLeft 0.5s ease-out forwards;
+}
+
+.animate-debris-r {
+  animation: debrisRight 0.5s ease-out forwards;
+}
+
+.animate-scale-balance {
+  animation: scaleBalance 1.8s ease-in-out;
+}
+
+.animate-hero-leap {
+  animation: heroLeap 0.48s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.animate-splash-ring {
+  animation: splashRing 1.2s ease-out infinite;
+}
+
+.animate-unlock-beam {
+  animation: unlockBeam 1.5s ease-out infinite;
+}
+
+.animate-flag-flutter {
+  animation: flagFlutter 0.8s ease-in-out infinite;
+}
+
+.animate-ghost-pace {
+  animation: ghostPace 2.2s ease-in-out infinite;
+}
+
+/* REAL ACTION ANIMATIONS */
+@keyframes dashAttackHero {
+  0% { transform: translateX(0) scale(1) rotate(0deg); }
+  25% { transform: translateX(120px) translateY(-14px) scale(1.15) rotate(8deg); }
+  50% { transform: translateX(230px) translateY(0px) scale(1.25) rotate(-6deg); }
+  65% { transform: translateX(210px) translateY(-6px) scale(1.18) rotate(4deg); }
+  100% { transform: translateX(0) scale(1) rotate(0deg); }
+}
+
+@keyframes golemSlamCharge {
+  0% { transform: translateX(0) scale(1); }
+  25% { transform: translateX(-100px) translateY(-18px) scale(1.12); }
+  50% { transform: translateX(-210px) translateY(8px) scale(1.28); }
+  70% { transform: translateX(-190px) translateY(0px) scale(1.15); }
+  100% { transform: translateX(0) scale(1); }
+}
+
+@keyframes tripRetreat {
+  0% { transform: translate(0, 0) rotate(0deg); }
+  20% { transform: translate(-8px, -12px) rotate(-16deg); }
+  45% { transform: translate(14px, 24px) rotate(18deg); }
+  70% { transform: translate(-6px, 16px) rotate(-8deg); }
+  100% { transform: translate(0, 0) rotate(0deg); }
+}
+
+@keyframes turboSurge {
+  0% { transform: scale(1) translateY(0); }
+  35% { transform: scale(1.18) translateY(-26px) skewX(-8deg); }
+  70% { transform: scale(1.12) translateY(-18px) skewX(-4deg); }
+  100% { transform: scale(1) translateY(0) skewX(0deg); }
+}
+
+@keyframes boltSlideOpen {
+  0% { transform: translateX(0); opacity: 1; }
+  60% { transform: translateX(65px); opacity: 0.9; }
+  100% { transform: translateX(90px); opacity: 0.2; }
+}
+
+@keyframes lockJamSpark {
+  0%, 100% { transform: scale(1) rotate(0deg); filter: none; }
+  20% { transform: scale(1.15) rotate(-10deg); filter: drop-shadow(0 0 12px #ef4444); }
+  40% { transform: scale(1.12) rotate(10deg); filter: drop-shadow(0 0 16px #f87171); }
+  60% { transform: scale(1.08) rotate(-6deg); }
+  80% { transform: scale(1.04) rotate(4deg); }
+}
+
+@keyframes gateLeftSwing {
+  0% { transform: perspective(600px) rotateY(0deg); }
+  100% { transform: perspective(600px) rotateY(-55deg); }
+}
+
+@keyframes gateRightSwing {
+  0% { transform: perspective(600px) rotateY(0deg); }
+  100% { transform: perspective(600px) rotateY(55deg); }
+}
+
+@keyframes bridgePierRise {
+  0% { transform: translateY(45px); opacity: 0; }
+  60% { transform: translateY(-4px); opacity: 1; }
+  100% { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes bridgeSpanConnect {
+  0% { transform: scaleX(0) translateY(-20px); opacity: 0; }
+  60% { transform: scaleX(1.05) translateY(2px); opacity: 1; }
+  100% { transform: scaleX(1) translateY(0); opacity: 1; }
+}
+
+@keyframes basketDrop {
+  0% { transform: translateY(-35px) scale(0.6) rotate(-20deg); opacity: 0; }
+  60% { transform: translateY(6px) scale(1.15) rotate(10deg); opacity: 1; }
+  80% { transform: translateY(-3px) scale(0.95) rotate(-4deg); }
+  100% { transform: translateY(0) scale(1) rotate(0deg); opacity: 1; }
+}
+
+.animate-dash-attack {
+  animation: dashAttackHero 0.75s cubic-bezier(0.18, 0.89, 0.32, 1.28) forwards;
+}
+
+.animate-golem-charge {
+  animation: golemSlamCharge 0.75s cubic-bezier(0.18, 0.89, 0.32, 1.28) forwards;
+}
+
+.animate-trip-retreat {
+  animation: tripRetreat 0.75s ease-in-out forwards;
+}
+
+.animate-turbo-surge {
+  animation: turboSurge 0.65s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.animate-bolt-open {
+  animation: boltSlideOpen 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-lock-jam {
+  animation: lockJamSpark 0.65s ease-in-out;
+}
+
+.animate-gate-left {
+  animation: gateLeftSwing 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  transform-origin: left center;
+}
+
+.animate-gate-right {
+  animation: gateRightSwing 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  transform-origin: right center;
+}
+
+.animate-pier-rise {
+  animation: bridgePierRise 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.animate-span-connect {
+  animation: bridgeSpanConnect 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  transform-origin: left center;
+}
+
+.animate-basket-drop {
+  animation: basketDrop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}

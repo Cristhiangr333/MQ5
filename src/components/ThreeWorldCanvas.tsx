@@ -2,6 +2,15 @@ import React, { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { WORLDS } from '../data/worldsData';
 import { GameMode } from '../types';
+import {
+  createRunnerCharacter,
+  createKnightHeroCharacter,
+  createGolemEnemyCharacter,
+  createMerchantCharacter,
+  createCustomerCharacter,
+  createExplorerCharacter,
+  createDetectiveCharacter,
+} from './characterBuilder3D';
 
 interface ThreeWorldCanvasProps {
   viewMode: 'map' | 'game';
@@ -13,7 +22,11 @@ interface ThreeWorldCanvasProps {
   heroHp: number;
   enemyHp: number;
   bridgeBuiltSegments: number;
+  raceProgress?: number;
+  shopCartTotal?: number;
+  cluesFound?: number;
   onSelectWorld?: (worldId: string) => void;
+  onWebGLError?: () => void;
 }
 
 export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
@@ -26,7 +39,11 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
   heroHp,
   enemyHp,
   bridgeBuiltSegments,
+  raceProgress = 0,
+  shopCartTotal = 0,
+  cluesFound = 0,
   onSelectWorld,
+  onWebGLError,
 }) => {
   const mountRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
@@ -34,15 +51,38 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const animFrameIdRef = useRef<number | null>(null);
 
+  // Keep onSelectWorld in ref so re-renders don't teardown WebGL
+  const onSelectWorldRef = useRef(onSelectWorld);
+  onSelectWorldRef.current = onSelectWorld;
+
   // Dynamic references for animated scene objects
   const runnerGroupRef = useRef<THREE.Group | null>(null);
-  const runnerLeftLegRef = useRef<THREE.Mesh | null>(null);
-  const runnerRightLegRef = useRef<THREE.Mesh | null>(null);
+  const runnerLeftLegRef = useRef<THREE.Group | THREE.Mesh | null>(null);
+  const runnerRightLegRef = useRef<THREE.Group | THREE.Mesh | null>(null);
   const trackPathMeshRef = useRef<THREE.Mesh | null>(null);
   const heroFighterRef = useRef<THREE.Group | null>(null);
   const enemyFighterRef = useRef<THREE.Group | null>(null);
   const bridgeSegmentsGroupRef = useRef<THREE.Group | null>(null);
+  const bridgeWalkerRef = useRef<THREE.Group | null>(null);
   const castleRunesRef = useRef<THREE.Mesh[]>([]);
+
+  // Shop 3D elements
+  const shopMerchantRef = useRef<THREE.Group | null>(null);
+  const shopMerchantHeadRef = useRef<THREE.Group | null>(null);
+  const shopCustomerRef = useRef<THREE.Group | null>(null);
+  const shopCoinsMeshRef = useRef<THREE.Mesh | null>(null);
+  const shopProductMeshRef = useRef<THREE.Group | null>(null);
+  const shopBasketGroupRef = useRef<THREE.Group | null>(null);
+  const shopCashboxRef = useRef<THREE.Mesh | null>(null);
+
+  // Castle 3D elements
+  const castleDoorLeftRef = useRef<THREE.Group | null>(null);
+  const castleDoorRightRef = useRef<THREE.Group | null>(null);
+  const castleLockBarsRef = useRef<THREE.Mesh[]>([]);
+  const castleDetectiveRef = useRef<THREE.Group | null>(null);
+  const castleBeamMeshRef = useRef<THREE.Mesh | null>(null);
+  const castleChestRef = useRef<THREE.Group | null>(null);
+
   const cloudsGroupRef = useRef<THREE.Group | null>(null);
   const mapIslandsRef = useRef<{ id: string; group: THREE.Group; mesh: THREE.Mesh }[]>([]);
 
@@ -75,12 +115,27 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
     camera.position.set(0, 12, 16);
     cameraRef.current = camera;
 
-    // 3. Renderer
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance' });
+    // 3. Renderer with safe WebGL creation
+    let renderer: THREE.WebGLRenderer;
+    try {
+      renderer = new THREE.WebGLRenderer({
+        antialias: true,
+        alpha: false,
+        powerPreference: 'high-performance',
+      });
+    } catch (err) {
+      console.warn('WebGL Renderer initialization failed, switching to illustrated mode:', err);
+      onWebGLError?.();
+      return;
+    }
+
     renderer.setSize(width, height);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.domElement.style.width = '100%';
+    renderer.domElement.style.height = '100%';
+    renderer.domElement.style.display = 'block';
     rendererRef.current = renderer;
 
     container.appendChild(renderer.domElement);
@@ -141,14 +196,28 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
     scene.add(cloudsGroup);
     cloudsGroupRef.current = cloudsGroup;
 
-    // Resize Handler
+    // Resize Handler via ResizeObserver
+    const resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const { width: w, height: h } = entry.contentRect;
+        if (w > 0 && h > 0 && cameraRef.current && rendererRef.current) {
+          cameraRef.current.aspect = w / h;
+          cameraRef.current.updateProjectionMatrix();
+          rendererRef.current.setSize(w, h);
+        }
+      }
+    });
+    resizeObserver.observe(container);
+
     const handleResize = () => {
       if (!container || !rendererRef.current || !cameraRef.current) return;
       const w = container.clientWidth;
       const h = container.clientHeight;
-      cameraRef.current.aspect = w / h;
-      cameraRef.current.updateProjectionMatrix();
-      rendererRef.current.setSize(w, h);
+      if (w > 0 && h > 0) {
+        cameraRef.current.aspect = w / h;
+        cameraRef.current.updateProjectionMatrix();
+        rendererRef.current.setSize(w, h);
+      }
     };
 
     window.addEventListener('resize', handleResize);
@@ -183,8 +252,8 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
       if (intersects.length > 0) {
         const hit = intersects[0].object;
         const matched = mapIslandsRef.current.find((item) => item.mesh === hit);
-        if (matched && onSelectWorld) {
-          onSelectWorld(matched.id);
+        if (matched && onSelectWorldRef.current) {
+          onSelectWorldRef.current(matched.id);
         }
       }
     };
@@ -195,6 +264,7 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
     window.addEventListener('mouseup', handlePointerUp);
 
     return () => {
+      resizeObserver.disconnect();
       window.removeEventListener('resize', handleResize);
       domEl.removeEventListener('mousedown', handlePointerDown);
       window.removeEventListener('mousemove', handlePointerMove);
@@ -206,7 +276,7 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
         rendererRef.current.dispose();
       }
     };
-  }, [onSelectWorld]);
+  }, []);
 
   // Build the appropriate 3D world elements whenever viewMode or currentWorldId changes
   useEffect(() => {
@@ -459,46 +529,13 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
         banner.position.set(0, 2.2, -10);
         rootGroup.add(banner);
 
-        // 3D Runner Character
-        const runner = new THREE.Group();
-        runner.position.set(0, 0.2, 4);
-
-        // Body
-        const bodyMesh = new THREE.Mesh(
-          new THREE.BoxGeometry(0.5, 0.6, 0.35),
-          new THREE.MeshStandardMaterial({ color: 0x2563eb, roughness: 0.4 })
-        );
-        bodyMesh.position.y = 0.7;
-        bodyMesh.castShadow = true;
-        runner.add(bodyMesh);
-
-        // Head
-        const headMesh = new THREE.Mesh(
-          new THREE.SphereGeometry(0.24, 12, 12),
-          new THREE.MeshStandardMaterial({ color: 0xfbcfe8, roughness: 0.5 })
-        );
-        headMesh.position.y = 1.15;
-        headMesh.castShadow = true;
-        runner.add(headMesh);
-
-        // Legs
-        const legGeo = new THREE.BoxGeometry(0.14, 0.45, 0.14);
-        const legMat = new THREE.MeshStandardMaterial({ color: 0x1e293b });
-
-        const leftLeg = new THREE.Mesh(legGeo, legMat);
-        leftLeg.position.set(-0.16, 0.25, 0);
-        leftLeg.castShadow = true;
-        runner.add(leftLeg);
-        runnerLeftLegRef.current = leftLeg;
-
-        const rightLeg = new THREE.Mesh(legGeo, legMat);
-        rightLeg.position.set(0.16, 0.25, 0);
-        rightLeg.castShadow = true;
-        runner.add(rightLeg);
-        runnerRightLegRef.current = rightLeg;
-
-        rootGroup.add(runner);
-        runnerGroupRef.current = runner;
+        // 3D Runner Character (Sculpted high-relief athletic model)
+        const runnerObj = createRunnerCharacter();
+        runnerObj.group.position.set(0, 0.2, 4);
+        runnerLeftLegRef.current = runnerObj.leftLeg;
+        runnerRightLegRef.current = runnerObj.rightLeg;
+        rootGroup.add(runnerObj.group);
+        runnerGroupRef.current = runnerObj.group;
       } else if (gameMode === 'battle') {
         // WORLD 2: MONTAÑA — Batalla en Arena 3D
         targetCamPos.current.set(0, 5, 9);
@@ -536,138 +573,154 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
           rootGroup.add(rock);
         }
 
-        // Hero Fighter (Left side, facing right)
-        const heroGroup = new THREE.Group();
-        heroGroup.position.set(-2.2, 0.6, 0);
-        heroGroup.rotation.y = Math.PI / 2;
+        // Hero Knight Fighter (Steel cuirass, pauldrons, plume & kite shield)
+        const heroObj = createKnightHeroCharacter();
+        heroObj.group.position.set(-2.2, 0.6, 0);
+        heroObj.group.rotation.y = Math.PI / 2;
+        rootGroup.add(heroObj.group);
+        heroFighterRef.current = heroObj.group;
 
-        const hBody = new THREE.Mesh(
-          new THREE.BoxGeometry(0.6, 0.8, 0.4),
-          new THREE.MeshStandardMaterial({ color: 0x3b82f6, roughness: 0.3 })
-        );
-        hBody.position.y = 0.6;
-        hBody.castShadow = true;
-        heroGroup.add(hBody);
-
-        const hHead = new THREE.Mesh(
-          new THREE.SphereGeometry(0.26, 12, 12),
-          new THREE.MeshStandardMaterial({ color: 0xfecdd3 })
-        );
-        hHead.position.y = 1.15;
-        heroGroup.add(hHead);
-
-        // Hero Sword / Staff
-        const sword = new THREE.Mesh(
-          new THREE.CylinderGeometry(0.04, 0.04, 1.4),
-          new THREE.MeshStandardMaterial({ color: 0x38bdf8, emissive: 0x0284c7 })
-        );
-        sword.rotation.z = Math.PI / 4;
-        sword.position.set(0.4, 0.8, 0.2);
-        heroGroup.add(sword);
-
-        rootGroup.add(heroGroup);
-        heroFighterRef.current = heroGroup;
-
-        // Enemy Rock Guardian (Right side, facing left)
-        const enemyGroup = new THREE.Group();
-        enemyGroup.position.set(2.2, 0.6, 0);
-        enemyGroup.rotation.y = -Math.PI / 2;
-
-        const eBody = new THREE.Mesh(
-          new THREE.DodecahedronGeometry(0.8, 1),
-          new THREE.MeshStandardMaterial({ color: 0x475569, roughness: 0.7, flatShading: true })
-        );
-        eBody.position.y = 0.9;
-        eBody.castShadow = true;
-        enemyGroup.add(eBody);
-
-        // Glowing crystal eyes
-        const eyeMat = new THREE.MeshStandardMaterial({ color: 0xef4444, emissive: 0xb91c1c });
-        const eyeL = new THREE.Mesh(new THREE.SphereGeometry(0.09, 8, 8), eyeMat);
-        eyeL.position.set(0.2, 1.1, 0.65);
-        const eyeR = new THREE.Mesh(new THREE.SphereGeometry(0.09, 8, 8), eyeMat);
-        eyeR.position.set(-0.2, 1.1, 0.65);
-        enemyGroup.add(eyeL);
-        enemyGroup.add(eyeR);
-
-        rootGroup.add(enemyGroup);
-        enemyFighterRef.current = enemyGroup;
+        // Enemy Mountain Golem (Chiseled bedrock, magma core & horns)
+        const enemyObj = createGolemEnemyCharacter();
+        enemyObj.group.position.set(2.2, 0.6, 0);
+        enemyObj.group.rotation.y = -Math.PI / 2;
+        rootGroup.add(enemyObj.group);
+        enemyFighterRef.current = enemyObj.group;
       } else if (gameMode === 'shop') {
-        // WORLD 3: CIUDAD — Mercado del Mercader 3D
-        targetCamPos.current.set(0, 4.5, 7.5);
-        targetCamLookAt.current.set(0, 1.2, 0);
+        // WORLD 3: CIUDAD — Mercado Real de Don Mateo 3D
+        targetCamPos.current.set(0, 4.4, 7.2);
+        targetCamLookAt.current.set(0, 1.3, 0);
 
-        // Cobblestone plaza
+        // Cobblestone town square ground
         const plaza = new THREE.Mesh(
           new THREE.CylinderGeometry(5.5, 5, 0.6, 18),
-          new THREE.MeshStandardMaterial({ color: 0x64748b, roughness: 0.9, flatShading: true })
+          new THREE.MeshStandardMaterial({ color: 0x475569, roughness: 0.85, flatShading: true })
         );
         plaza.position.y = 0;
         plaza.receiveShadow = true;
         rootGroup.add(plaza);
 
-        // Merchant Stall with canopy
+        // Market Stall Counter
         const counter = new THREE.Mesh(
-          new THREE.BoxGeometry(3.2, 0.9, 1.2),
-          new THREE.MeshStandardMaterial({ color: 0x78350f, roughness: 0.7 })
+          new THREE.BoxGeometry(3.6, 1.0, 1.4),
+          new THREE.MeshStandardMaterial({ color: 0x78350f, roughness: 0.65 })
         );
-        counter.position.set(0, 0.75, -1.5);
+        counter.position.set(0, 0.8, 0);
         counter.castShadow = true;
         counter.receiveShadow = true;
         rootGroup.add(counter);
 
-        // Stall Poles
+        // Awning pillars & canopy
         const poleMat = new THREE.MeshStandardMaterial({ color: 0x451a03 });
-        [-1.4, 1.4].forEach((px) => {
-          const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 2.2), poleMat);
-          pole.position.set(px, 1.4, -1.5);
+        [-1.6, 1.6].forEach((px) => {
+          const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 2.6), poleMat);
+          pole.position.set(px, 1.7, 0);
           rootGroup.add(pole);
         });
 
         // Striped Awning
         const canopy = new THREE.Mesh(
-          new THREE.BoxGeometry(3.4, 0.15, 1.8),
-          new THREE.MeshStandardMaterial({ color: 0x8b5cf6, roughness: 0.4 })
+          new THREE.BoxGeometry(3.8, 0.16, 2.0),
+          new THREE.MeshStandardMaterial({ color: 0x8b5cf6, roughness: 0.35 })
         );
-        canopy.position.set(0, 2.4, -1.2);
-        canopy.rotation.x = 0.2;
+        canopy.position.set(0, 2.8, 0.1);
+        canopy.rotation.x = 0.15;
         rootGroup.add(canopy);
 
-        // Goods crates on counter
-        const itemsGroup = new THREE.Group();
-        for (let i = 0; i < 4; i++) {
-          const crate = new THREE.Mesh(
-            new THREE.BoxGeometry(0.5, 0.4, 0.5),
-            new THREE.MeshStandardMaterial({ color: 0xd97706 })
-          );
-          crate.position.set(-1.0 + i * 0.7, 1.4, -1.5);
-          // Gem on top
-          const gem = new THREE.Mesh(
-            new THREE.OctahedronGeometry(0.18),
-            new THREE.MeshStandardMaterial({ color: 0x38bdf8, emissive: 0x0369a1, roughness: 0.1 })
-          );
-          gem.position.y = 0.35;
-          crate.add(gem);
-          itemsGroup.add(crate);
-        }
-        rootGroup.add(itemsGroup);
+        // Merchant Don Mateo (Sculpted apron with pocket, curled mustache, toque & cuffs)
+        const merchantObj = createMerchantCharacter();
+        merchantObj.group.position.set(0, 0.3, -1.2);
+        rootGroup.add(merchantObj.group);
+        shopMerchantRef.current = merchantObj.group;
+        shopMerchantHeadRef.current = merchantObj.headGroup;
 
-        // Buyer Customer Avatar in foreground
-        const buyer = new THREE.Group();
-        buyer.position.set(0, 0.3, 1.8);
-        const bBody = new THREE.Mesh(
-          new THREE.BoxGeometry(0.6, 0.75, 0.4),
-          new THREE.MeshStandardMaterial({ color: 0x10b981 })
+        // Wooden Cash Register / Coin Box on merchant counter (right side)
+        const cashbox = new THREE.Mesh(
+          new THREE.BoxGeometry(0.55, 0.3, 0.45),
+          new THREE.MeshStandardMaterial({ color: 0x92400e, roughness: 0.5 })
         );
-        bBody.position.y = 0.6;
-        buyer.add(bBody);
-        const bHead = new THREE.Mesh(
-          new THREE.SphereGeometry(0.24, 10, 10),
-          new THREE.MeshStandardMaterial({ color: 0xfed7aa })
+        cashbox.position.set(0.9, 1.45, -0.3);
+        rootGroup.add(cashbox);
+        shopCashboxRef.current = cashbox;
+
+        // Customer's Wicker Shopping Basket on front counter (left side)
+        const basket = new THREE.Group();
+        basket.position.set(-0.85, 1.35, 0.35);
+
+        const bRim = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.38, 0.3, 0.32, 12),
+          new THREE.MeshStandardMaterial({ color: 0xd97706, roughness: 0.8 })
         );
-        bHead.position.y = 1.15;
-        buyer.add(bHead);
-        rootGroup.add(buyer);
+        basket.add(bRim);
+
+        // Handle
+        const handle = new THREE.Mesh(
+          new THREE.TorusGeometry(0.32, 0.04, 6, 12, Math.PI),
+          new THREE.MeshStandardMaterial({ color: 0xb45309 })
+        );
+        handle.position.y = 0.18;
+        handle.rotation.x = Math.PI / 2;
+        basket.add(handle);
+
+        // Visual items inside customer's basket
+        const boughtCount = Math.max(0, shopCartTotal || questionIndex);
+        for (let b = 0; b < Math.min(boughtCount, 5); b++) {
+          const itemInBasket = new THREE.Mesh(
+            new THREE.SphereGeometry(0.1, 8, 8),
+            new THREE.MeshStandardMaterial({ color: b % 2 === 0 ? 0xef4444 : 0x38bdf8 })
+          );
+          itemInBasket.position.set((b % 2) * 0.14 - 0.07, 0.1 + b * 0.05, Math.floor(b / 2) * 0.12 - 0.06);
+          basket.add(itemInBasket);
+        }
+
+        rootGroup.add(basket);
+        shopBasketGroupRef.current = basket;
+
+        // Customer Avatar in foreground (Sculpted coat, satchel bag & boots)
+        const customerObj = createCustomerCharacter();
+        customerObj.group.position.set(0, 0.3, 1.8);
+        rootGroup.add(customerObj.group);
+        shopCustomerRef.current = customerObj.group;
+
+        // Active Golden Coins stack (held by customer, ready to pay)
+        const coinsGroup = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.2, 0.2, 0.12, 12),
+          new THREE.MeshStandardMaterial({
+            color: 0xfbbf24,
+            emissive: 0xd97706,
+            metalness: 0.8,
+            roughness: 0.2,
+          })
+        );
+        coinsGroup.position.set(0.1, 1.25, 1.2);
+        rootGroup.add(coinsGroup);
+        shopCoinsMeshRef.current = coinsGroup;
+
+        // Active Product being purchased (rests on merchant stand, ready to deliver)
+        const productGroup = new THREE.Group();
+        productGroup.position.set(0, 1.45, -0.2);
+
+        // Glowing Apple / Potion item
+        const appleMesh = new THREE.Mesh(
+          new THREE.SphereGeometry(0.18, 10, 10),
+          new THREE.MeshStandardMaterial({
+            color: 0xef4444,
+            emissive: 0x991b1b,
+            roughness: 0.3,
+          })
+        );
+        productGroup.add(appleMesh);
+
+        // Small stem
+        const stem = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.02, 0.02, 0.08),
+          new THREE.MeshStandardMaterial({ color: 0x15803d })
+        );
+        stem.position.y = 0.18;
+        productGroup.add(stem);
+
+        rootGroup.add(productGroup);
+        shopProductMeshRef.current = productGroup;
       } else if (gameMode === 'bridge') {
         // WORLD 4: RÍO — Puente Flotante 3D
         targetCamPos.current.set(0, 5, 8.5);
@@ -702,75 +755,179 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
         bridgeSegmentsGroupRef.current = bridgeGroup;
         rootGroup.add(bridgeGroup);
 
-        // Character walking across the bridge
-        const walker = new THREE.Group();
+        // Character walking across the bridge (Sculpted explorer with ranger hat, vest pockets, pack & staff)
+        const walkerObj = createExplorerCharacter();
         const walkerX = -2.6 + (bridgeBuiltSegments / Math.max(1, totalQuestions)) * 5.2;
-        walker.position.set(walkerX, 1.2, 0);
-        walker.rotation.y = Math.PI / 2;
-
-        const wBody = new THREE.Mesh(
-          new THREE.BoxGeometry(0.45, 0.65, 0.3),
-          new THREE.MeshStandardMaterial({ color: 0x0284c7 })
-        );
-        wBody.position.y = 0.5;
-        walker.add(wBody);
-        const wHead = new THREE.Mesh(
-          new THREE.SphereGeometry(0.22, 10, 10),
-          new THREE.MeshStandardMaterial({ color: 0xfed7aa })
-        );
-        wHead.position.y = 1.0;
-        walker.add(wHead);
-        rootGroup.add(walker);
+        walkerObj.group.position.set(walkerX, 1.2, 0);
+        walkerObj.group.rotation.y = Math.PI / 2;
+        rootGroup.add(walkerObj.group);
+        bridgeWalkerRef.current = walkerObj.group;
       } else if (gameMode === 'detective') {
-        // WORLD 5: CASTILLO — Enigma del Detective 3D
-        targetCamPos.current.set(0, 4.5, 8.5);
-        targetCamLookAt.current.set(0, 1.4, 0);
+        // WORLD 5: CASTILLO — Gran Portón Acorazado y Cerrojos Mecánicos 3D
+        targetCamPos.current.set(0, 4.4, 8.2);
+        targetCamLookAt.current.set(0, 1.5, 0);
 
-        // Citadel Base
-        const castleBase = new THREE.Mesh(
-          new THREE.CylinderGeometry(4.5, 4.0, 1.4, 8),
-          new THREE.MeshStandardMaterial({ color: 0x3b0764, roughness: 0.6, flatShading: true })
+        // Fortress Stone Courtyard Floor
+        const courtyard = new THREE.Mesh(
+          new THREE.CylinderGeometry(6.0, 5.5, 0.6, 18),
+          new THREE.MeshStandardMaterial({ color: 0x1e1b4b, roughness: 0.9, flatShading: true })
         );
-        castleBase.position.y = 0;
-        rootGroup.add(castleBase);
+        courtyard.position.y = 0;
+        courtyard.receiveShadow = true;
+        rootGroup.add(courtyard);
 
-        // Citadel Tower Spire
-        const tower = new THREE.Mesh(
-          new THREE.CylinderGeometry(1.2, 1.6, 3.4, 8),
-          new THREE.MeshStandardMaterial({ color: 0x581c87, roughness: 0.5 })
+        // Massive Stone Wall Portal
+        const wallLeft = new THREE.Mesh(
+          new THREE.BoxGeometry(2.5, 5.0, 1.2),
+          new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.8 })
         );
-        tower.position.set(0, 2.2, -1.2);
-        rootGroup.add(tower);
+        wallLeft.position.set(-2.8, 2.5, -0.8);
+        rootGroup.add(wallLeft);
 
-        const roof = new THREE.Mesh(
-          new THREE.ConeGeometry(1.8, 2.2, 8),
-          new THREE.MeshStandardMaterial({ color: 0xf59e0b, roughness: 0.3 })
+        const wallRight = new THREE.Mesh(
+          new THREE.BoxGeometry(2.5, 5.0, 1.2),
+          new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.8 })
         );
-        roof.position.set(0, 4.8, -1.2);
-        rootGroup.add(roof);
+        wallRight.position.set(2.8, 2.5, -0.8);
+        rootGroup.add(wallRight);
 
-        // 5 Magical Clue Runes rotating around the tower
-        castleRunesRef.current = [];
-        for (let i = 0; i < 5; i++) {
-          const angle = (i * Math.PI * 2) / 5;
-          const runeGeo = new THREE.TorusGeometry(0.35, 0.08, 8, 16);
-          const runeMat = new THREE.MeshStandardMaterial({
-            color: i < questionIndex ? 0xf43f5e : 0x475569,
-            emissive: i < questionIndex ? 0xbe123c : 0x000000,
+        // Gothic Arch Top
+        const archTop = new THREE.Mesh(
+          new THREE.BoxGeometry(3.6, 1.2, 1.2),
+          new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.7 })
+        );
+        archTop.position.set(0, 4.4, -0.8);
+        rootGroup.add(archTop);
+
+        // Torches with fire on the wall sides
+        [-2.0, 2.0].forEach((tx) => {
+          const torchSconce = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.06, 0.04, 0.5),
+            new THREE.MeshStandardMaterial({ color: 0x78350f })
+          );
+          torchSconce.position.set(tx, 2.8, -0.15);
+          rootGroup.add(torchSconce);
+
+          const flame = new THREE.Mesh(
+            new THREE.ConeGeometry(0.12, 0.28, 8),
+            new THREE.MeshBasicMaterial({ color: 0xf59e0b })
+          );
+          flame.position.set(tx, 3.1, -0.15);
+          rootGroup.add(flame);
+        });
+
+        // Interior Golden Vault Chamber (revealed when doors open)
+        const chestGroup = new THREE.Group();
+        chestGroup.position.set(0, 1.1, -2.4);
+
+        const chestBase = new THREE.Mesh(
+          new THREE.BoxGeometry(0.9, 0.6, 0.6),
+          new THREE.MeshStandardMaterial({
+            color: 0xf59e0b,
+            emissive: 0xd97706,
+            metalness: 0.85,
             roughness: 0.2,
-          });
-          const rune = new THREE.Mesh(runeGeo, runeMat);
-          rune.position.set(Math.cos(angle) * 2.8, 1.8 + (i % 2) * 0.4, Math.sin(angle) * 2.8);
-          rootGroup.add(rune);
-          castleRunesRef.current.push(rune);
+          })
+        );
+        chestGroup.add(chestBase);
+
+        const chestLid = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.3, 0.3, 0.9, 10, 1, false, 0, Math.PI),
+          new THREE.MeshStandardMaterial({
+            color: 0xfbbf24,
+            emissive: 0xb45309,
+            metalness: 0.9,
+          })
+        );
+        chestLid.rotation.z = Math.PI / 2;
+        chestLid.position.y = 0.3;
+        chestGroup.add(chestLid);
+
+        rootGroup.add(chestGroup);
+        castleChestRef.current = chestGroup;
+
+        // Double Heavy Oak Vault Doors (hinged on left and right)
+        const doorLeft = new THREE.Group();
+        doorLeft.position.set(-1.5, 1.9, -0.8);
+        const dMeshL = new THREE.Mesh(
+          new THREE.BoxGeometry(1.5, 3.4, 0.22),
+          new THREE.MeshStandardMaterial({ color: 0x451a03, roughness: 0.7 })
+        );
+        dMeshL.position.x = 0.75;
+        doorLeft.add(dMeshL);
+        rootGroup.add(doorLeft);
+        castleDoorLeftRef.current = doorLeft;
+
+        const doorRight = new THREE.Group();
+        doorRight.position.set(1.5, 1.9, -0.8);
+        const dMeshR = new THREE.Mesh(
+          new THREE.BoxGeometry(1.5, 3.4, 0.22),
+          new THREE.MeshStandardMaterial({ color: 0x451a03, roughness: 0.7 })
+        );
+        dMeshR.position.x = -0.75;
+        doorRight.add(dMeshR);
+        rootGroup.add(doorRight);
+        castleDoorRightRef.current = doorRight;
+
+        // Initial door rotation based on unlocked enigmas
+        const currentUnlocked = cluesFound || questionIndex;
+        if (currentUnlocked >= 5) {
+          doorLeft.rotation.y = -1.2;
+          doorRight.rotation.y = 1.2;
+        } else {
+          doorLeft.rotation.y = -currentUnlocked * 0.08;
+          doorRight.rotation.y = currentUnlocked * 0.08;
         }
+
+        // 5 Heavy Iron Cross-Bolts horizontally locking the doors
+        castleLockBarsRef.current = [];
+        const startY = 0.9;
+        const boltSpacing = 0.5;
+
+        for (let i = 0; i < 5; i++) {
+          const isUnlocked = i < currentUnlocked;
+          const isCurrent = i === questionIndex;
+
+          const boltGeo = new THREE.BoxGeometry(1.8, 0.22, 0.28);
+          const boltMat = new THREE.MeshStandardMaterial({
+            color: isUnlocked ? 0x10b981 : isCurrent ? 0xf59e0b : 0x64748b,
+            emissive: isUnlocked ? 0x065f46 : isCurrent ? 0x78350f : 0x000000,
+            metalness: 0.7,
+            roughness: 0.3,
+          });
+          const bolt = new THREE.Mesh(boltGeo, boltMat);
+          bolt.position.set(isUnlocked ? 2.4 : 0, startY + i * boltSpacing, -0.65);
+          rootGroup.add(bolt);
+          castleLockBarsRef.current.push(bolt);
+        }
+
+        // Detective Character in left foreground (Trench coat with lapels, fedora hat, cipher wand & boots)
+        const detObj = createDetectiveCharacter();
+        detObj.group.position.set(-1.8, 0.3, 2.2);
+        detObj.group.rotation.y = Math.PI / 4;
+        rootGroup.add(detObj.group);
+        castleDetectiveRef.current = detObj.group;
+
+        // Cipher Ray Light Beam (connecting wand to lock bar)
+        const beamGeo = new THREE.CylinderGeometry(0.05, 0.08, 3.2, 8);
+        const beamMat = new THREE.MeshBasicMaterial({
+          color: 0xfbbf24,
+          transparent: true,
+          opacity: 0,
+        });
+        const beam = new THREE.Mesh(beamGeo, beamMat);
+        beam.position.set(-0.9, 1.4, 0.8);
+        beam.rotation.x = Math.PI / 2.6;
+        beam.rotation.z = -Math.PI / 6;
+        rootGroup.add(beam);
+        castleBeamMeshRef.current = beam;
       }
     }
 
     scene.add(rootGroup);
   }, [viewMode, currentWorldId, gameMode, totalQuestions, bridgeBuiltSegments, questionIndex]);
 
-  // Update Dynamic Bridge Segments when bridgeBuiltSegments changes
+  // Update Dynamic Bridge Segments and advance walker when bridgeBuiltSegments changes
   useEffect(() => {
     if (gameMode !== 'bridge' || !bridgeSegmentsGroupRef.current) return;
     const group = bridgeSegmentsGroupRef.current;
@@ -786,86 +943,354 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
 
     for (let i = 0; i < totalSegs; i++) {
       const isBuilt = i < bridgeBuiltSegments;
-      const segGeo = new THREE.BoxGeometry(step * 0.9, 0.25, 1.8);
-      const segMat = new THREE.MeshStandardMaterial({
-        color: isBuilt ? 0xfbbf24 : 0x334155,
-        roughness: isBuilt ? 0.3 : 0.8,
-        emissive: isBuilt ? 0x92400e : 0x000000,
+      const segGroup = new THREE.Group();
+      segGroup.position.set(startX + step * i + step * 0.5, 0, 0);
+
+      // Timber bridge deck span
+      const deckGeo = new THREE.BoxGeometry(step * 0.94, 0.22, 1.8);
+      const deckMat = new THREE.MeshStandardMaterial({
+        color: isBuilt ? 0xd97706 : 0x334155,
+        roughness: isBuilt ? 0.4 : 0.8,
+        emissive: isBuilt ? 0x78350f : 0x000000,
         flatShading: true,
       });
-      const segment = new THREE.Mesh(segGeo, segMat);
-      segment.position.set(startX + step * i + step * 0.5, isBuilt ? 1.0 : -0.2, 0);
-      group.add(segment);
+      const deck = new THREE.Mesh(deckGeo, deckMat);
+      deck.position.y = isBuilt ? 1.0 : -0.3;
+      segGroup.add(deck);
+
+      // Stone pier foundation pillar rising from river bed
+      const pierGeo = new THREE.CylinderGeometry(0.18, 0.22, 1.4, 8);
+      const pierMat = new THREE.MeshStandardMaterial({
+        color: isBuilt ? 0x64748b : 0x1e293b,
+        roughness: 0.7,
+      });
+      const pier = new THREE.Mesh(pierGeo, pierMat);
+      pier.position.y = isBuilt ? 0.3 : -0.4;
+      segGroup.add(pier);
+
+      // Wooden side handrails when built
+      if (isBuilt) {
+        [-0.8, 0.8].forEach((zPos) => {
+          const rail = new THREE.Mesh(
+            new THREE.BoxGeometry(step * 0.9, 0.08, 0.08),
+            new THREE.MeshStandardMaterial({ color: 0x92400e })
+          );
+          rail.position.set(0, 1.35, zPos);
+          segGroup.add(rail);
+        });
+      }
+
+      group.add(segGroup);
+    }
+
+    // Move 3D walker forward onto the newest constructed bridge pier
+    if (bridgeWalkerRef.current) {
+      const targetWalkerX = startX + (bridgeBuiltSegments / totalSegs) * (endX - startX);
+      bridgeWalkerRef.current.position.x = targetWalkerX;
+      bridgeWalkerRef.current.position.y = 1.2;
     }
   }, [bridgeBuiltSegments, totalQuestions, gameMode]);
 
-  // Handle Response Animation (Race runner hop, Battle strike, etc.)
+  // Handle Response Animation (Race real advance/retreat, Battle real contact strike, etc.)
   useEffect(() => {
     if (isCorrect === null) return;
 
     if (gameMode === 'race' && runnerGroupRef.current) {
+      const runner = runnerGroupRef.current;
+      const startZ = runner.position.z;
+      const startTime = performance.now();
+
       if (isCorrect) {
-        // Hop forward
-        const startZ = runnerGroupRef.current.position.z;
-        const targetZ = Math.max(-8, startZ - 1.8);
-        const startTime = performance.now();
-        const hopAnim = (time: number) => {
-          const elapsed = (time - startTime) / 300;
+        // High-speed sprint surge forward towards the finish line
+        const targetZ = THREE.MathUtils.lerp(4, -8, Math.min(1, (raceProgress || 0) / 100));
+        const sprintAnim = (time: number) => {
+          const elapsed = (time - startTime) / 420;
           if (elapsed < 1 && runnerGroupRef.current) {
-            runnerGroupRef.current.position.y = 0.2 + Math.sin(elapsed * Math.PI) * 0.8;
-            runnerGroupRef.current.position.z = THREE.MathUtils.lerp(startZ, targetZ, elapsed);
-            requestAnimationFrame(hopAnim);
+            runner.position.y = 0.2 + Math.sin(elapsed * Math.PI) * 0.45;
+            runner.position.z = THREE.MathUtils.lerp(startZ, targetZ, elapsed);
+            runner.rotation.x = Math.sin(elapsed * Math.PI) * 0.3; // Lean forward into sprint
+            requestAnimationFrame(sprintAnim);
           } else if (runnerGroupRef.current) {
-            runnerGroupRef.current.position.y = 0.2;
-            runnerGroupRef.current.position.z = targetZ;
+            runner.position.y = 0.2;
+            runner.position.z = targetZ;
+            runner.rotation.x = 0;
           }
         };
-        requestAnimationFrame(hopAnim);
+        requestAnimationFrame(sprintAnim);
+      } else {
+        // RETROCEDER SI PIERDE: runner trips, stumbles backward along the track
+        const retreatZ = Math.min(4.5, startZ + 1.6);
+        const tripAnim = (time: number) => {
+          const elapsed = (time - startTime) / 500;
+          if (elapsed < 0.4) {
+            // Initial trip/stumble
+            const phase = elapsed / 0.4;
+            runner.position.y = 0.2 + Math.sin(phase * Math.PI) * 0.25;
+            runner.rotation.x = -Math.sin(phase * Math.PI) * 0.45; // Lean backward
+            runner.rotation.z = Math.sin(phase * Math.PI * 3) * 0.15; // Stumble wobble
+          } else if (elapsed < 1.0) {
+            // Sliding backward along track
+            const phase = (elapsed - 0.4) / 0.6;
+            runner.position.z = THREE.MathUtils.lerp(startZ, retreatZ, phase);
+            runner.rotation.x = -0.45 * (1 - phase);
+            runner.rotation.z = 0;
+            runner.position.y = 0.2;
+          } else {
+            runner.position.z = retreatZ;
+            runner.rotation.x = 0;
+            runner.rotation.z = 0;
+            runner.position.y = 0.2;
+          }
+          if (elapsed < 1.0) requestAnimationFrame(tripAnim);
+        };
+        requestAnimationFrame(tripAnim);
       }
     } else if (gameMode === 'battle') {
       if (isCorrect && heroFighterRef.current && enemyFighterRef.current) {
-        // Hero attack dash
+        // Hero athletic direct dash-slash contact attack
         const hero = heroFighterRef.current;
         const enemy = enemyFighterRef.current;
-        const originalX = hero.position.x;
+        const originalHeroX = hero.position.x;
+        const originalHeroY = 0.6;
+        const enemyOriginalX = 1.8;
         const startTime = performance.now();
         const attackAnim = (time: number) => {
-          const elapsed = (time - startTime) / 380;
-          if (elapsed < 0.5) {
-            hero.position.x = THREE.MathUtils.lerp(originalX, originalX + 1.8, elapsed * 2);
+          const elapsed = (time - startTime) / 480;
+          if (elapsed < 0.45) {
+            // Dash all the way into enemy melee range
+            const phase = elapsed / 0.45;
+            hero.position.x = THREE.MathUtils.lerp(originalHeroX, enemyOriginalX - 0.7, phase);
+            hero.position.y = originalHeroY + Math.sin(phase * Math.PI) * 0.5;
+            hero.rotation.z = -Math.sin(phase * Math.PI) * 0.4;
+          } else if (elapsed < 0.7) {
+            // Direct strike contact & enemy violent knockback
+            const phase = (elapsed - 0.45) / 0.25;
+            hero.position.x = enemyOriginalX - 0.7;
+            hero.rotation.z = 0.1;
+            enemy.position.x = THREE.MathUtils.lerp(enemyOriginalX, enemyOriginalX + 0.8, phase);
+            enemy.rotation.z = Math.sin(phase * Math.PI * 4) * 0.35;
           } else if (elapsed < 1.0) {
-            hero.position.x = THREE.MathUtils.lerp(originalX + 1.8, originalX, (elapsed - 0.5) * 2);
-            enemy.rotation.z = Math.sin((elapsed - 0.5) * Math.PI * 4) * 0.2;
-          } else {
-            hero.position.x = originalX;
+            // Hero leaps back to safety, enemy recovers
+            const phase = (elapsed - 0.7) / 0.3;
+            hero.position.x = THREE.MathUtils.lerp(enemyOriginalX - 0.7, originalHeroX, phase);
+            hero.position.y = originalHeroY;
+            hero.rotation.z = 0;
+            enemy.position.x = THREE.MathUtils.lerp(enemyOriginalX + 0.8, enemyOriginalX, phase);
             enemy.rotation.z = 0;
+          } else {
+            hero.position.x = originalHeroX;
+            hero.position.y = originalHeroY;
+            hero.rotation.z = 0;
+            enemy.rotation.z = 0;
+            enemy.position.x = enemyOriginalX;
           }
           if (elapsed < 1.0) requestAnimationFrame(attackAnim);
         };
         requestAnimationFrame(attackAnim);
       } else if (!isCorrect && heroFighterRef.current && enemyFighterRef.current) {
-        // Enemy counter-attack dash
+        // Enemy boulder slam direct smash counter-attack
         const hero = heroFighterRef.current;
         const enemy = enemyFighterRef.current;
-        const originalX = enemy.position.x;
+        const originalEnemyX = enemy.position.x;
+        const originalHeroX = -1.8;
         const startTime = performance.now();
         const enemyAnim = (time: number) => {
-          const elapsed = (time - startTime) / 380;
-          if (elapsed < 0.5) {
-            enemy.position.x = THREE.MathUtils.lerp(originalX, originalX - 1.6, elapsed * 2);
+          const elapsed = (time - startTime) / 500;
+          if (elapsed < 0.45) {
+            // Enemy charges across the arena straight to the Hero
+            const phase = elapsed / 0.45;
+            enemy.position.x = THREE.MathUtils.lerp(originalEnemyX, originalHeroX + 0.8, phase);
+            enemy.position.y = 0.6 + Math.sin(phase * Math.PI) * 0.6;
+          } else if (elapsed < 0.7) {
+            // Fists smash down onto Hero, Hero gets knocked back
+            const phase = (elapsed - 0.45) / 0.25;
+            enemy.position.x = originalHeroX + 0.8;
+            enemy.position.y = 0.6;
+            hero.position.x = THREE.MathUtils.lerp(originalHeroX, originalHeroX - 0.9, phase);
+            hero.rotation.z = -Math.sin(phase * Math.PI * 3) * 0.45;
           } else if (elapsed < 1.0) {
-            enemy.position.x = THREE.MathUtils.lerp(originalX - 1.6, originalX, (elapsed - 0.5) * 2);
-            hero.rotation.z = -Math.sin((elapsed - 0.5) * Math.PI * 4) * 0.2;
+            // Enemy returns to position, Hero recovers
+            const phase = (elapsed - 0.7) / 0.3;
+            enemy.position.x = THREE.MathUtils.lerp(originalHeroX + 0.8, originalEnemyX, phase);
+            hero.position.x = THREE.MathUtils.lerp(originalHeroX - 0.9, originalHeroX, phase);
+            hero.rotation.z = 0;
           } else {
-            enemy.position.x = originalX;
+            enemy.position.x = originalEnemyX;
+            enemy.position.y = 0.6;
+            hero.position.x = originalHeroX;
             hero.rotation.z = 0;
           }
           if (elapsed < 1.0) requestAnimationFrame(enemyAnim);
         };
         requestAnimationFrame(enemyAnim);
       }
+    } else if (gameMode === 'bridge' && bridgeWalkerRef.current) {
+      const walker = bridgeWalkerRef.current;
+      const totalSegs = totalQuestions || 5;
+      const startX = -2.6;
+      const endX = 2.6;
+      const currentX = walker.position.x;
+      const targetX = startX + (bridgeBuiltSegments / totalSegs) * (endX - startX);
+      const startTime = performance.now();
+
+      if (isCorrect) {
+        // Physical leap across to the newly placed bridge span
+        const leapAnim = (time: number) => {
+          const elapsed = (time - startTime) / 450;
+          if (elapsed < 1 && bridgeWalkerRef.current) {
+            walker.position.x = THREE.MathUtils.lerp(currentX, targetX, elapsed);
+            walker.position.y = 1.2 + Math.sin(elapsed * Math.PI) * 0.6;
+            requestAnimationFrame(leapAnim);
+          } else if (bridgeWalkerRef.current) {
+            walker.position.x = targetX;
+            walker.position.y = 1.2;
+          }
+        };
+        requestAnimationFrame(leapAnim);
+      } else {
+        // Stumble backward away from the open canyon gap
+        const stumbleAnim = (time: number) => {
+          const elapsed = (time - startTime) / 400;
+          if (elapsed < 1 && bridgeWalkerRef.current) {
+            walker.position.x = currentX - Math.sin(elapsed * Math.PI) * 0.35;
+            walker.rotation.z = Math.sin(elapsed * Math.PI * 4) * 0.25;
+            requestAnimationFrame(stumbleAnim);
+          } else if (bridgeWalkerRef.current) {
+            walker.position.x = currentX;
+            walker.rotation.z = 0;
+          }
+        };
+        requestAnimationFrame(stumbleAnim);
+      }
+    } else if (gameMode === 'shop' && shopCoinsMeshRef.current && shopProductMeshRef.current) {
+      const coins = shopCoinsMeshRef.current;
+      const product = shopProductMeshRef.current;
+      const merchantHead = shopMerchantHeadRef.current;
+      const startTime = performance.now();
+
+      const initialCoinsPos = new THREE.Vector3(0.1, 1.25, 1.2);
+      const targetCoinsPos = new THREE.Vector3(0.9, 1.5, -0.3); // into Don Mateo's cashbox
+
+      const initialProdPos = new THREE.Vector3(0, 1.45, -0.2);
+      const targetProdPos = new THREE.Vector3(-0.85, 1.4, 0.35); // into player's shopping basket
+
+      if (isCorrect) {
+        // Physical purchase transaction:
+        // 1. Coins fly arc into merchant's register
+        // 2. Purchased item arcs into customer's shopping basket
+        // 3. Merchant nods head and gives item
+        const anim = (time: number) => {
+          const elapsed = (time - startTime) / 600;
+          if (elapsed < 0.5) {
+            const p = elapsed / 0.5;
+            coins.position.lerpVectors(initialCoinsPos, targetCoinsPos, p);
+            coins.position.y = initialCoinsPos.y + Math.sin(p * Math.PI) * 0.85;
+            coins.rotation.z = p * Math.PI * 4;
+          } else if (elapsed < 1.0) {
+            coins.position.copy(targetCoinsPos);
+            const p = (elapsed - 0.5) / 0.5;
+            product.position.lerpVectors(initialProdPos, targetProdPos, p);
+            product.position.y = initialProdPos.y + Math.sin(p * Math.PI) * 0.7;
+            product.scale.set(1 + Math.sin(p * Math.PI) * 0.25, 1 + Math.sin(p * Math.PI) * 0.25, 1 + Math.sin(p * Math.PI) * 0.25);
+            if (merchantHead) {
+              merchantHead.rotation.x = Math.sin(p * Math.PI * 2) * 0.2;
+            }
+          } else {
+            coins.position.copy(initialCoinsPos);
+            coins.rotation.z = 0;
+            product.position.copy(initialProdPos);
+            product.scale.set(1, 1, 1);
+            if (merchantHead) merchantHead.rotation.x = 0;
+          }
+          if (elapsed < 1.0) requestAnimationFrame(anim);
+        };
+        requestAnimationFrame(anim);
+      } else {
+        // Incorrect: Merchant shakes head 'No', coins bounce back, product remains unpurchased
+        const anim = (time: number) => {
+          const elapsed = (time - startTime) / 480;
+          if (elapsed < 1.0) {
+            if (merchantHead) {
+              merchantHead.rotation.y = Math.sin(elapsed * Math.PI * 6) * 0.35;
+            }
+            coins.position.z = initialCoinsPos.z - Math.sin(elapsed * Math.PI) * 0.25;
+            requestAnimationFrame(anim);
+          } else {
+            if (merchantHead) merchantHead.rotation.y = 0;
+            coins.position.copy(initialCoinsPos);
+          }
+        };
+        requestAnimationFrame(anim);
+      }
+    } else if (gameMode === 'detective' && castleLockBarsRef.current.length > 0) {
+      const activeIdx = Math.min(questionIndex, 4);
+      const activeBar = castleLockBarsRef.current[activeIdx];
+      const beam = castleBeamMeshRef.current;
+      const doorLeft = castleDoorLeftRef.current;
+      const doorRight = castleDoorRightRef.current;
+      const startTime = performance.now();
+
+      if (isCorrect && activeBar) {
+        // 1. Golden beam shoots from detective's cipher wand to active lock bar
+        // 2. Lock bar mechanically slides into the right stone wall recess (x = 2.4)
+        // 3. Castle vault doors creak open wider, revealing treasure chest chamber
+        const startX = activeBar.position.x;
+        const targetX = 2.4;
+
+        const anim = (time: number) => {
+          const elapsed = (time - startTime) / 650;
+          if (beam) {
+            (beam.material as THREE.MeshBasicMaterial).opacity = Math.sin(Math.min(elapsed, 1.0) * Math.PI) * 0.95;
+          }
+
+          if (elapsed < 1.0) {
+            activeBar.position.x = THREE.MathUtils.lerp(startX, targetX, elapsed);
+            if (activeBar.material instanceof THREE.MeshStandardMaterial) {
+              activeBar.material.color.setHex(0xfbbf24);
+              activeBar.material.emissive.setHex(0xd97706);
+            }
+            const openFactor = Math.min((questionIndex + 1) / 5, 1.0);
+            const maxAngle = questionIndex >= 4 ? 1.25 : openFactor * 0.65;
+            if (doorLeft) doorLeft.rotation.y = -THREE.MathUtils.lerp(0, maxAngle, elapsed);
+            if (doorRight) doorRight.rotation.y = THREE.MathUtils.lerp(0, maxAngle, elapsed);
+
+            requestAnimationFrame(anim);
+          } else {
+            activeBar.position.x = targetX;
+            if (activeBar.material instanceof THREE.MeshStandardMaterial) {
+              activeBar.material.color.setHex(0x10b981);
+              activeBar.material.emissive.setHex(0x065f46);
+            }
+            if (beam) {
+              (beam.material as THREE.MeshBasicMaterial).opacity = 0;
+            }
+          }
+        };
+        requestAnimationFrame(anim);
+      } else if (!isCorrect && activeBar) {
+        // Bolt rattles stubbornly against the oak gate with warning red vibration
+        const originalX = activeBar.position.x;
+        const anim = (time: number) => {
+          const elapsed = (time - startTime) / 450;
+          if (elapsed < 1.0) {
+            activeBar.position.x = originalX + Math.sin(elapsed * Math.PI * 8) * 0.12;
+            if (activeBar.material instanceof THREE.MeshStandardMaterial) {
+              activeBar.material.color.setHex(0xef4444);
+              activeBar.material.emissive.setHex(0x991b1b);
+            }
+            requestAnimationFrame(anim);
+          } else {
+            activeBar.position.x = originalX;
+            if (activeBar.material instanceof THREE.MeshStandardMaterial) {
+              activeBar.material.color.setHex(0xf59e0b);
+              activeBar.material.emissive.setHex(0x78350f);
+            }
+          }
+        };
+        requestAnimationFrame(anim);
+      }
     }
-  }, [isCorrect, gameMode, heroHp, enemyHp]);
+  }, [isCorrect, gameMode, heroHp, enemyHp, raceProgress, bridgeBuiltSegments, questionIndex, totalQuestions, cluesFound, shopCartTotal]);
 
   // Main Render & Animation Loop
   useEffect(() => {
@@ -905,18 +1330,37 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
 
       // Game Mode animations
       if (gameMode === 'race') {
-        // Running legs swinging
+        // Running legs swinging & vertical running bounce
         if (runnerLeftLegRef.current && runnerRightLegRef.current) {
           const runSpeed = 14;
           runnerLeftLegRef.current.rotation.x = Math.sin(time * runSpeed) * 0.65;
           runnerRightLegRef.current.rotation.x = -Math.sin(time * runSpeed) * 0.65;
+          if (runnerGroupRef.current && isCorrect !== true) {
+            runnerGroupRef.current.position.y = 0.2 + Math.abs(Math.sin(time * runSpeed)) * 0.08;
+          }
+        }
+      } else if (gameMode === 'battle') {
+        // Hero & Enemy idle breathing movement
+        if (heroFighterRef.current && enemyFighterRef.current && isCorrect === null) {
+          heroFighterRef.current.position.y = 0.6 + Math.sin(time * 3) * 0.04;
+          enemyFighterRef.current.position.y = 0.6 + Math.cos(time * 2.5) * 0.04;
+        }
+      } else if (gameMode === 'shop') {
+        // Merchant breathing & coin gleam
+        if (shopMerchantRef.current && isCorrect === null) {
+          shopMerchantRef.current.position.y = 0.3 + Math.sin(time * 2.5) * 0.02;
+        }
+        if (shopCoinsMeshRef.current && isCorrect === null) {
+          shopCoinsMeshRef.current.rotation.y = time * 0.8;
         }
       } else if (gameMode === 'detective') {
-        // Rotating castle rings
-        castleRunesRef.current.forEach((rune, idx) => {
-          rune.rotation.x = time * 1.5 + idx;
-          rune.rotation.y = time * 1.2 + idx;
-        });
+        // Detective subtle breathing & wand ambient pulsing
+        if (castleDetectiveRef.current && isCorrect === null) {
+          castleDetectiveRef.current.position.y = 0.3 + Math.sin(time * 2) * 0.02;
+        }
+        if (castleChestRef.current) {
+          castleChestRef.current.position.y = 1.1 + Math.sin(time * 3) * 0.03;
+        }
       }
 
       if (rendererRef.current && sceneRef.current && cameraRef.current) {

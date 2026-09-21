@@ -25,31 +25,31 @@ export const TeacherReportModal: React.FC<TeacherReportModalProps> = ({
       name: 'Operaciones y cálculo mental ágil',
       worldName: 'Bosque de la Suma',
       icon: '🏃',
-      target: '5to Grado - Números naturales y patrones',
+      target: '3er Grado - Sumas de 1 cifra (1 al 9) y patrones',
       status: (stats.worldProgress['bosque']?.correctAnswers || 0) >= 3 ? 'Dominado' : 'En progreso',
       score: stats.worldProgress['bosque']?.highScore || 0,
     },
     {
-      name: 'Sustracción y relaciones inversas',
+      name: 'Sustracción y diferencias',
       worldName: 'Montaña de la Resta',
       icon: '⚔️',
-      target: '5to Grado - Reagrupación y cálculo inverso',
+      target: '3er Grado - Restas de 1 cifra y cálculo inverso',
       status: (stats.worldProgress['montana']?.correctAnswers || 0) >= 3 ? 'Dominado' : 'En progreso',
       score: stats.worldProgress['montana']?.highScore || 0,
     },
     {
-      name: 'Multiplicación y presupuestos cotidianos',
+      name: 'Multiplicación en contextos cotidianos',
       worldName: 'Ciudad de la Multiplicación',
       icon: '🛒',
-      target: '5to Grado - Resolución de problemas en contexto',
+      target: '3er Grado - Tablas de multiplicar de 1 cifra (2, 3, 4 y 5)',
       status: (stats.worldProgress['ciudad']?.correctAnswers || 0) >= 3 ? 'Dominado' : 'Bloqueado/Inicial',
       score: stats.worldProgress['ciudad']?.highScore || 0,
     },
     {
-      name: 'División, fracciones y razonamiento lógico',
+      name: 'Reparto equitativo y enigmas de 1 cifra',
       worldName: 'Río y Castillo',
       icon: '🌉',
-      target: '5to Grado - Repartos equitativos y fracciones',
+      target: '3er Grado - Divisiones exactas e incógnitas de 1 cifra',
       status: (stats.worldProgress['rio']?.correctAnswers || 0) >= 3 ? 'Dominado' : 'En exploración',
       score: (stats.worldProgress['rio']?.highScore || 0) + (stats.worldProgress['castillo']?.highScore || 0),
     },
@@ -77,7 +77,7 @@ export const TeacherReportModal: React.FC<TeacherReportModalProps> = ({
               Panel de Aprendizaje y Docente
             </h2>
             <p className="text-xs text-slate-400">
-              Diagnóstico pedagógico en tiempo real · 5to Grado de Primaria
+              Diagnóstico pedagógico en tiempo real · 3er Grado de Primaria (1 Cifra)
             </p>
           </div>
         </div>

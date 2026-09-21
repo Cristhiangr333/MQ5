@@ -53,7 +53,7 @@ export const QuestionPanel: React.FC<QuestionPanelProps> = ({
         </span>
 
         <span className="inline-flex items-center gap-1 bg-slate-800 text-slate-300 text-xs font-semibold px-2.5 py-1 rounded-full border border-slate-700">
-          Nivel {question.difficulty} · 5º Grado
+          Nivel {question.difficulty} · 3º Grado (1 Cifra)
         </span>
 
         {combo >= 2 && (
