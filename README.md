@@ -1,20 +1,32 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
+# MathQuest 5
 
-# Run and deploy your AI Studio app
+Juego educativo 3D de matemáticas para estudiantes de 5.º grado (9–11 años). El estudiante explora un archipiélago de 5 mundos y supera retos para desbloquear nuevas regiones.
 
-This contains everything you need to run your app locally.
+| Mundo | Juego | Competencia |
+|---|---|---|
+| Bosque de la Suma | Carrera Matemática | Cálculo mental ágil |
+| Montaña de la Resta | Batalla Matemática | Sustracción |
+| Ciudad de la Multiplicación | Tienda Matemática | Multiplicación en contexto |
+| Río de la División | Construye el Puente | División y reparto |
+| Castillo del Saber | Detective Matemático | Razonamiento y fracciones |
 
-View your app in AI Studio: https://ai.studio/apps/786fd588-ce50-4a84-81e4-2df69a32983f
+## Stack
 
-## Run Locally
+React 19 · TypeScript · Vite · Tailwind CSS 4 · Three.js · (Fase 1) Supabase · Vercel
 
-**Prerequisites:**  Node.js
+## Desarrollo local
 
+```bash
+npm install
+npm run dev      # http://localhost:3000
+npm run lint     # comprobación de tipos (tsc --noEmit)
+npm run build    # build de producción en dist/
+```
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+Variables de entorno: copia `.env.example` a `.env.local` cuando se conecte Supabase.
+
+## Estado
+
+Prototipo importado de Google AI Studio, en proceso de convertirse en producto. Sin persistencia ni autenticación todavía.
+
+Ruta de trabajo: Foundation → Core Experience → Game Systems → Progression → Teacher Dashboard → Polish → QA → Production.
