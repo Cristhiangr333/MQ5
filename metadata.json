@@ -1,6 +1,0 @@
-{
-  "name": "MathQuest 5 — Juego 3D de 5 Mundos",
-  "description": "Juego interactivo en 3D con 5 mundos flotantes: Carrera en el Bosque, Batalla en la Montaña, Tienda en la Ciudad, Puente del Río y Enigma del Castillo.",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
-}
