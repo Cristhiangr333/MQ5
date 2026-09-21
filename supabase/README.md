@@ -6,6 +6,7 @@ Las migraciones se ejecutan **a mano** en el panel de Supabase: **SQL Editor →
 |---|---|
 | `0001_identity_and_courses.sql` | Docentes, cursos, estudiantes, RLS y funciones de registro |
 | `0002_content_catalog.sql` | Regiones, juegos, combinaciones y banco de 735 preguntas |
+| `0003_teacher_signup.sql` | Registro de docentes con código de institución |
 
 Cada migración tiene su deshacer en `rollbacks/`.
 
@@ -38,6 +39,16 @@ select (select count(*) from public.questions)    as preguntas,
 select tablename, rowsecurity from pg_tables
 where schemaname = 'public' order by 1;
 ```
+
+## Configurar el registro de docentes (0003)
+1. Authentication → Sign In / Providers (User Signups): **Confirm email → apagado**, y *Save changes* (ver ADR-005).
+2. Define el código que darás a los docentes (elige uno largo y propio):
+```sql
+insert into public.app_settings (key, value)
+values ('teacher_signup_code', 'ESCRIBE-TU-CODIGO')
+on conflict (key) do update set value = excluded.value;
+```
+3. Para cerrar el registro de nuevos docentes: `delete from public.app_settings where key = 'teacher_signup_code';`
 
 ## Variables del frontend
 Solo la URL y la clave pública (`anon` / *publishable*). **Nunca** la `service_role`. Ver `.env.example`.
