@@ -68,7 +68,7 @@ export default function App() {
     };
   });
 
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const currentWorld: WorldDefinition =
     WORLDS.find((w) => w.id === currentWorldId) || WORLDS[0];
