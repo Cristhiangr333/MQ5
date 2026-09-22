@@ -6,19 +6,23 @@ import { WorldViewport } from './components/WorldViewport';
 import { GameHUD } from './components/GameHUD';
 import { QuestionPanel } from './components/QuestionPanel';
 import { WorldCardStrip } from './components/WorldCardStrip';
-import { TeacherReportModal } from './components/TeacherReportModal';
 import { GameOverModal } from './components/GameOverModal';
-import { Play, Compass, Sparkles, BookOpen, Volume2, Shield } from 'lucide-react';
+import { Play, Compass, Sparkles, Volume2, Shield, LogOut } from 'lucide-react';
 
 const QUESTIONS_PER_WORLD = 5;
 const MAX_LIVES = 3;
 const TIME_PER_QUESTION_MS = 8000;
 
-export default function App() {
+interface AppProps {
+  playerName?: string;
+  courseName?: string;
+  onExit?: () => void;
+}
+
+export default function App({ playerName, courseName, onExit }: AppProps = {}) {
   const [viewMode, setViewMode] = useState<'map' | 'game'>('game');
   const [currentWorldId, setCurrentWorldId] = useState<string>('bosque');
   const [isMuted, setIsMuted] = useState<boolean>(getIsMuted());
-  const [isReportOpen, setIsReportOpen] = useState<boolean>(false);
 
   // Persistent Player Stats
   const [stats, setStats] = useState<PlayerStats>(() => {
@@ -320,6 +324,25 @@ export default function App() {
     <div className="min-h-screen bg-[#142138] text-slate-100 flex flex-col items-center justify-start p-3 sm:p-5 md:p-6 font-['Nunito_Sans',sans-serif]">
       {/* Cabinet Container */}
       <main className="w-full max-w-4xl flex flex-col gap-4">
+        {/* Quién juega */}
+        {playerName && (
+          <div className="flex items-center justify-between gap-3 px-1">
+            <p className="text-sm font-bold text-slate-200 truncate">
+              👋 Hola, <span className="text-emerald-300">{playerName}</span>
+              {courseName && <span className="text-slate-400 font-semibold"> · {courseName}</span>}
+            </p>
+            {onExit && (
+              <button
+                onClick={onExit}
+                className="min-h-10 px-3 rounded-xl text-sm font-bold text-slate-300 bg-slate-800/70 hover:bg-slate-700 border border-slate-700 inline-flex items-center gap-1.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300"
+              >
+                <LogOut className="w-4 h-4" aria-hidden="true" />
+                <span>Cambiar de estudiante</span>
+              </button>
+            )}
+          </div>
+        )}
+
         {/* Top HUD */}
         <GameHUD
           currentWorld={currentWorld}
@@ -333,7 +356,6 @@ export default function App() {
           isMuted={isMuted}
           onToggleSound={() => setIsMuted(toggleAudioMute())}
           onOpenMap={() => setViewMode((v) => (v === 'map' ? 'game' : 'map'))}
-          onOpenReport={() => setIsReportOpen(true)}
           onResetGame={() => initWorldSession(currentWorldId)}
         />
 
@@ -410,26 +432,11 @@ export default function App() {
 
         {/* Pedagogical Footer Note */}
         <footer className="text-center text-xs text-slate-500 py-3 flex flex-wrap items-center justify-center gap-3 border-t border-slate-800/60">
-          <span>🎮 MathQuest 5 · Para estudiantes de quinto grado</span>
+          <span>🎮 MathQuest 5 · Para estudiantes de tercer grado</span>
           <span>·</span>
           <span>⌨️ Atajos: Teclas [1, 2, 3] para responder · [M] Mapa 3D · [S] Sonido</span>
-          <span>·</span>
-          <button
-            onClick={() => setIsReportOpen(true)}
-            className="text-blue-400 hover:underline flex items-center gap-1"
-          >
-            <BookOpen className="w-3.5 h-3.5" />
-            <span>Ver reporte docente</span>
-          </button>
         </footer>
       </main>
-
-      {/* Teacher / Learning Report Modal */}
-      <TeacherReportModal
-        isOpen={isReportOpen}
-        onClose={() => setIsReportOpen(false)}
-        stats={stats}
-      />
 
       {/* Game Over / Victory Modal */}
       <GameOverModal

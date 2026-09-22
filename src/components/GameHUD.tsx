@@ -14,7 +14,7 @@ interface GameHUDProps {
   isMuted: boolean;
   onToggleSound: () => void;
   onOpenMap: () => void;
-  onOpenReport: () => void;
+  onOpenReport?: () => void;
   onResetGame: () => void;
 }
 
@@ -127,13 +127,15 @@ export const GameHUD: React.FC<GameHUDProps> = ({
             </button>
           )}
 
-          <button
-            onClick={onOpenReport}
-            className="p-1.5 text-slate-400 hover:text-white bg-slate-800/70 hover:bg-slate-700 rounded-lg transition-colors"
-            title="Ver reporte pedagógico y competencias"
-          >
-            <BarChart3 className="w-4 h-4" />
-          </button>
+          {onOpenReport && (
+            <button
+              onClick={onOpenReport}
+              className="p-1.5 text-slate-400 hover:text-white bg-slate-800/70 hover:bg-slate-700 rounded-lg transition-colors"
+              title="Ver reporte pedagógico y competencias"
+            >
+              <BarChart3 className="w-4 h-4" />
+            </button>
+          )}
 
           <button
             onClick={onToggleSound}
