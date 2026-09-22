@@ -52,3 +52,15 @@ Cada decisión importante: qué cambió, por qué y qué impacto tiene.
   | 5 | Detective | 5 | 15 | 2 | 1–2 (la dificultad real es el formato "número faltante", no hace falta sumar números más grandes) |
 
 - **Pendiente:** el desbloqueo secuencial (nivel N+1 requiere completar N) y las estrellas por ronda se implementan en la migración de intentos y progreso, que pasa a ser la `0005`.
+
+## ADR-007 · Intentos, estrellas y XP: todo calculado en el servidor
+- **Qué:** una sola función, `submit_round(región, nivel, respuestas)`, es la única forma de registrar una ronda jugada. El cliente manda qué respondió a cada pregunta (no si acertó ni cuánto XP ganó); el servidor recalcula todo comparando contra `questions.correct_answer`.
+- **Reglas:**
+  - **Desbloqueo:** el nivel 1 de cada mundo siempre está abierto. Los niveles 2 a 5 requieren una ronda **completa** con **al menos 1 estrella** en el nivel anterior, del mismo estudiante, en la misma región.
+  - **Estrellas** (decisión del profe, opción B): 3 si acertó el 100%, 2 si acertó el 70% o más, 1 si terminó la ronda con menos del 70%, 0 si no la terminó (se quedó sin vidas a mitad de camino — el servidor lo detecta porque llegan menos respuestas de las que pide `questions_per_round`).
+  - **XP:** ronda completa = 10 por acierto, más un bono de 30/15/0 según las estrellas. Ronda incompleta = 5 por acierto, sin bono: se reconoce el esfuerzo sin premiar el abandono.
+  - **Región:** se desbloquea cuando el XP acumulado del estudiante (en cualquier mundo) llega a `regions.required_xp`.
+- **Validaciones anti-trampa** (probadas explícitamente, no solo asumidas): no se puede repetir una pregunta en la misma ronda, no se puede mandar más respuestas de las que pide el nivel, y cada pregunta debe pertenecer a la región y al rango de dificultad de ese nivel específico — así nadie puede "colar" una pregunta fácil de otro nivel para inflar su cuenta de aciertos.
+- **Compromiso conocido (heredado del ADR-004):** el servidor no confía en lo que el cliente *afirme*, pero el cliente sigue *viendo* la respuesta correcta antes de contestar, porque así se puede dar feedback inmediato. Sigue como mejora P2.
+- **Tablas nuevas:** `rounds` (una fila por ronda jugada, con sus estrellas y XP) y `attempts` (una fila por pregunta respondida dentro de esa ronda — es la materia prima para que el docente vea en qué falla cada estudiante).
+- **No se guarda un "total de XP" aparte:** se sigue calculando sumando `rounds.xp_earned` cada vez (`get_my_total_xp`). Con el volumen de un salón de clase no hace falta una columna cacheada; si el proyecto creciera mucho, sería la primera optimización a considerar.

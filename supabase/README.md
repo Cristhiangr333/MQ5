@@ -8,6 +8,7 @@ Las migraciones se ejecutan **a mano** en el panel de Supabase: **SQL Editor →
 | `0002_content_catalog.sql` | Regiones, juegos, combinaciones y banco de 735 preguntas |
 | `0003_teacher_signup.sql` | Registro de docentes con código de institución |
 | `0004_recalibrate_levels.sql` | Progresión de los 5 niveles y ampliación del banco de Resta |
+| `0005_attempts_and_progress.sql` | Rondas, intentos, estrellas, XP y desbloqueo — todo calculado en el servidor |
 
 Cada migración tiene su deshacer en `rollbacks/`.
 
@@ -60,6 +61,16 @@ from public.game_modes order by sort_order;
 -- Debe devolver 1572 (735 originales + 837 nuevas de resta)
 select count(*) from public.questions;
 ```
+
+## Verificación de la 0005
+```sql
+-- Debe devolver 4 filas: rounds y attempts con rowsecurity=true, y 4 políticas en total
+select tablename, rowsecurity from pg_tables
+where schemaname='public' and tablename in ('rounds','attempts');
+select tablename, policyname from pg_policies
+where schemaname='public' and tablename in ('rounds','attempts') order by 1,2;
+```
+Para probarla de verdad, juega una ronda desde la app una vez esté conectada (Fase 2) y confirma en Table Editor que aparecen filas en `rounds` y `attempts`.
 
 ## Variables del frontend
 Solo la URL y la clave pública (`anon` / *publishable*). **Nunca** la `service_role`. Ver `.env.example`.
