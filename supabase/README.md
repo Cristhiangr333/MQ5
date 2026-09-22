@@ -7,6 +7,7 @@ Las migraciones se ejecutan **a mano** en el panel de Supabase: **SQL Editor →
 | `0001_identity_and_courses.sql` | Docentes, cursos, estudiantes, RLS y funciones de registro |
 | `0002_content_catalog.sql` | Regiones, juegos, combinaciones y banco de 735 preguntas |
 | `0003_teacher_signup.sql` | Registro de docentes con código de institución |
+| `0004_recalibrate_levels.sql` | Progresión de los 5 niveles y ampliación del banco de Resta |
 
 Cada migración tiene su deshacer en `rollbacks/`.
 
@@ -49,6 +50,16 @@ values ('teacher_signup_code', 'ESCRIBE-TU-CODIGO')
 on conflict (key) do update set value = excluded.value;
 ```
 3. Para cerrar el registro de nuevos docentes: `delete from public.app_settings where key = 'teacher_signup_code';`
+
+## Verificación de la 0004
+```sql
+-- Debe devolver los 5 niveles en orden 1-5: race, battle, bridge, shop, detective
+select sort_order, id, questions_per_round, seconds_per_question, lives, difficulty_min, difficulty_max
+from public.game_modes order by sort_order;
+
+-- Debe devolver 1572 (735 originales + 837 nuevas de resta)
+select count(*) from public.questions;
+```
 
 ## Variables del frontend
 Solo la URL y la clave pública (`anon` / *publishable*). **Nunca** la `service_role`. Ver `.env.example`.

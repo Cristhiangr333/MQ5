@@ -35,3 +35,20 @@ Cada decisión importante: qué cambió, por qué y qué impacto tiene.
   - No hay recuperación de contraseña por correo. Mientras tanto, el administrador la restablece desde Authentication → Users.
   - Mejoras futuras: iniciar sesión con Google (identidad verificada, sin correos) es P1; SMTP propio para recuperar contraseñas es P2.
 - **Renumeración:** la migración de intentos y progreso pasa a ser la 0004.
+
+## ADR-006 · Los 5 juegos como niveles progresivos, mismo orden en los 4 mundos
+- **Qué:** dentro de cada mundo, los 5 juegos son niveles con un orden fijo — 1 Carrera, 2 Batalla, 3 Puente, 4 Tienda, 5 Detective — y se desbloquean en ese orden: hay que terminar el nivel N para jugar el N+1. La dificultad sube con el nivel en tres variables a la vez: segundos por pregunta, vidas y el rango de la columna `questions.difficulty` que se sirve (nuevas columnas `game_modes.difficulty_min/max`).
+- **Por qué:** el prototipo original mezclaba parámetros sin ninguna lógica entre juegos (10, 12, 12, 15, 20 segundos sin relación con la dificultad real). Un orden fijo y una progresión consistente hace que las 4 regiones se sientan como el mismo tipo de experiencia, en vez de 20 pantallas sueltas.
+- **Impacto:** se creó la migración `0004`, no se editó la `0002` porque esta ya se había ejecutado en producción — el historial de migraciones debe reflejar lo que realmente corrió, en el orden en que corrió.
+- **Bug encontrado al probar:** la `0002` generó la Resta solo con minuendos de una cifra (2-9), así que toda quedó en `difficulty=1`. Con los rangos nuevos, los niveles 3 y 4 (dificultad 2 y 3) del mundo Resta se habrían quedado sin preguntas disponibles — el juego se habría visto en blanco. Se corrigió en la misma `0004`, ampliando el banco de Resta con minuendos de dos cifras (837 preguntas nuevas). El resto de las regiones ya tenía suficiente variedad en los 3 niveles de dificultad.
+- **Progresión de cada nivel** (igual en los 4 mundos):
+
+  | Nivel | Juego | Preguntas | Seg/pregunta | Vidas | Dificultad |
+  |---|---|---|---|---|---|
+  | 1 | Carrera | 5 | 12 | 3 | 1 |
+  | 2 | Batalla | 5 | 11 | 3 | 1–2 |
+  | 3 | Puente | 6 | 10 | 3 | 2 |
+  | 4 | Tienda | 6 | 10 | 2 | 2–3 |
+  | 5 | Detective | 5 | 15 | 2 | 1–2 (la dificultad real es el formato "número faltante", no hace falta sumar números más grandes) |
+
+- **Pendiente:** el desbloqueo secuencial (nivel N+1 requiere completar N) y las estrellas por ronda se implementan en la migración de intentos y progreso, que pasa a ser la `0005`.
