@@ -52,3 +52,14 @@ Cada decisión importante: qué cambió, por qué y qué impacto tiene.
   | 5 | Detective | 5 | 15 | 2 | 1–2 (la dificultad real es el formato "número faltante", no hace falta sumar números más grandes) |
 
 - **Pendiente:** el desbloqueo secuencial (nivel N+1 requiere completar N) y las estrellas por ronda se implementan en la migración de intentos y progreso, que pasa a ser la `0005`.
+
+## ADR-007 · Reglas de rondas, estrellas y XP (migración 0005)
+- **Qué:** se crean `rounds` (una fila por ronda jugada) y `attempts` (una fila por pregunta respondida dentro de esa ronda), y una única función `submit_round(region_id, game_mode_id, answers)` como puerta de entrada. El cliente manda solo qué respondió a cada pregunta; el servidor recalcula aciertos, estrellas y XP desde `questions.correct_answer` — nunca confía en lo que el cliente declare (continúa el principio de ADR-004).
+- **Reglas:**
+  - Desbloqueo secuencial dentro de una región: el nivel 1 (Carrera) siempre está abierto; el nivel N+1 requiere una ronda del nivel N **completa** (todas las preguntas respondidas, no abandonada) y con **al menos 1 estrella**.
+  - Estrellas: 3 si acertó el 100%, 2 si acertó 70% o más, 1 si terminó la ronda con menos del 70%, 0 si se quedó sin vidas antes de terminar.
+  - XP: 10 por acierto en una ronda completa, más un bono de 30/15/0 según las estrellas obtenidas. Ronda incompleta: 5 por acierto, sin bono — así el esfuerzo no queda en cero, pero abandonar nunca conviene más que terminar.
+  - Una región (`regions.required_xp`) se desbloquea cuando el XP acumulado del estudiante, sumado entre todas las regiones, llega al umbral — no XP "de esa región" específicamente.
+- **Por qué:** es la contraparte de servidor de ADR-006 (progresión de los 5 niveles): sin esto, el "desbloqueo" y las "estrellas" eran solo estado local de React que se perdía al recargar la página y que cualquiera podía manipular.
+- **Impacto:** `get_my_progress()` devuelve de una sola vez el estado de las 4 regiones × 5 niveles (bloqueado/desbloqueado, mejores estrellas, rondas jugadas) para pintar el mapa. El frontend debe dejar de generar XP/estrellas localmente y usar `submit_round()` al terminar cada ronda.
+- **Compromiso conocido:** `submit_round()` verifica que cada `question_id` recibido pertenezca a esa región y encaje con el `kind`/rango de dificultad del nivel (`invalid_question` si no), pero no verifica que las preguntas realmente se le hayan mostrado al estudiante en esa sesión — un estudiante decidido podría enviar `question_id` de otras preguntas válidas del mismo nivel sin haberlas visto. Cerrarlo exigiría que el servidor emita y recuerde qué preguntas le tocaron a cada ronda (P2); por ahora el riesgo es bajo porque no cambia qué preguntas existen, solo en qué orden se "verían".
