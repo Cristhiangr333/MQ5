@@ -42,6 +42,6 @@ Sin `.env.local` la app muestra una pantalla de "falta configurar la conexión" 
 
 ## Estado
 
-Prototipo importado de Google AI Studio (5 mundos, contenido de 3.º grado), con login funcionando: estudiantes con código de curso, docentes con cuenta propia. Falta guardar el progreso e intentos en Supabase (Fase 2). Ver `supabase/README.md`.
+Estudiantes con código de curso, docentes con cuenta propia. El juego ya usa el modelo real: **4 regiones (Bosque=Suma, Montaña=Resta, Ciudad=Multiplicación, Castillo=División) × 5 niveles cada una** (Carrera → Batalla → Puente → Tienda → Detective, con desbloqueo secuencial), preguntas leídas del banco real de Supabase, y el progreso (estrellas, XP, desbloqueo) se guarda de verdad con `submit_round()`. Ver `docs/DECISIONS.md` (ADR-003/006/007). Pendiente: que el panel docente muestre ese progreso real por estudiante (hoy solo lista los estudiantes del curso).
 
 Ruta de trabajo: Foundation → Core Experience → Game Systems → Progression → Teacher Dashboard → Polish → QA → Production.
