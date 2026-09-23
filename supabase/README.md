@@ -8,7 +8,7 @@ Las migraciones se ejecutan **a mano** en el panel de Supabase: **SQL Editor →
 | `0002_content_catalog.sql` | Regiones, juegos, combinaciones y banco de 735 preguntas |
 | `0003_teacher_signup.sql` | Registro de docentes con código de institución |
 | `0004_recalibrate_levels.sql` | Progresión de los 5 niveles y ampliación del banco de Resta |
-| `0005_attempts_and_progress.sql` | Rondas, intentos, `submit_round()`, `get_my_progress()`: XP y desbloqueo reales |
+| `0005_attempts_and_progress.sql` | Rondas, intentos, estrellas, XP y desbloqueo — todo calculado en el servidor |
 
 Cada migración tiene su deshacer en `rollbacks/`.
 
@@ -62,25 +62,15 @@ from public.game_modes order by sort_order;
 select count(*) from public.questions;
 ```
 
-## Verificación de la 0005 (ya aplicada en producción)
-Consultas para confirmar que quedó bien, si quieres volver a revisarlo desde el SQL Editor de Supabase:
+## Verificación de la 0005
 ```sql
--- Debe devolver 2 filas con rowsecurity = true
+-- Debe devolver 4 filas: rounds y attempts con rowsecurity=true, y 4 políticas en total
 select tablename, rowsecurity from pg_tables
-where schemaname = 'public' and tablename in ('rounds','attempts')
-order by 1;
-
--- Debe fallar con "not_a_student" si lo ejecutas desde el SQL Editor (no hay sesión de estudiante)
-select public.submit_round('bosque', 'race', '[{"question_id": 1, "answer": 1}]'::jsonb);
+where schemaname='public' and tablename in ('rounds','attempts');
+select tablename, policyname from pg_policies
+where schemaname='public' and tablename in ('rounds','attempts') order by 1,2;
 ```
-Desde la app, tras jugar una ronda de prueba como estudiante:
-```sql
--- Debe devolver la ronda recién jugada
-select * from public.rounds order by created_at desc limit 1;
-
--- Debe devolver 4 regiones × 5 niveles = 20 filas, con el desbloqueo correcto
-select * from public.get_my_progress();
-```
+Para probarla de verdad, juega una ronda desde la app una vez esté conectada (Fase 2) y confirma en Table Editor que aparecen filas en `rounds` y `attempts`.
 
 ## Variables del frontend
 Solo la URL y la clave pública (`anon` / *publishable*). **Nunca** la `service_role`. Ver `.env.example`.
