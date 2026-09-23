@@ -18,8 +18,57 @@ interface IllustratedWorldViewportProps {
   cluesFound?: number;
   combo: number;
   activeQuestion: MathQuestion | null;
+  gameWon?: boolean;
+  gameOver?: boolean;
   onSelectRegion: (regionId: string) => void;
 }
+
+const OutcomeOverlay: React.FC<{
+  gameWon?: boolean;
+  gameOver?: boolean;
+  gameMode: GameMode;
+}> = ({ gameWon, gameOver, gameMode }) => {
+  if (!gameWon && !gameOver) return null;
+
+  const winTitles: Record<GameMode, { title: string; subtitle: string; icon: string }> = {
+    race: { title: '¡CARRERA GANADA!', subtitle: '¡Cruzaste la meta en 1º puesto con gran aceleración!', icon: '🏆' },
+    battle: { title: '¡VICTORIA ÉPICA!', subtitle: '¡Has derrotado al temible Guardián de Roca!', icon: '⚔️' },
+    shop: { title: '¡TIENDA REPLETA DE ORO!', subtitle: '¡Don Mateo celebró el récord histórico de ventas!', icon: '💰' },
+    bridge: { title: '¡PUENTE COMPLETADO!', subtitle: '¡El explorador cruzó el cañón a salvo!', icon: '🚩' },
+    detective: { title: '¡ENIGMA RESUELTO!', subtitle: '¡La cámara acorazada del castillo se ha abierto!', icon: '💎' },
+  };
+
+  const loseTitles: Record<GameMode, { title: string; subtitle: string; icon: string }> = {
+    race: { title: '¡CARRERA PERDIDA!', subtitle: 'Te quedaste sin energía en la pista.', icon: '🏃💨' },
+    battle: { title: '¡DERROTA EN COMBATE!', subtitle: 'El héroe no pudo resistir el embate del Guardián.', icon: '🛡️💥' },
+    shop: { title: '¡TIENDA CERRADA!', subtitle: 'Don Mateo ha tenido que cerrar el puesto.', icon: '📦🚫' },
+    bridge: { title: '¡PUENTE DERRUMBADO!', subtitle: 'Las tablas del puente cedieron en el cañón.', icon: '🌉💥' },
+    detective: { title: '¡PORTÓN BLOQUEADO!', subtitle: 'El sistema de cerrojos del castillo se ha trabado.', icon: '🔒⚡' },
+  };
+
+  const info = gameWon ? winTitles[gameMode] : loseTitles[gameMode];
+
+  return (
+    <div className="absolute inset-0 z-40 flex flex-col items-center justify-center bg-slate-950/85 backdrop-blur-md animate-fade-in pointer-events-none p-4 text-center">
+      <div
+        className={`p-6 rounded-2xl border-2 shadow-2xl max-w-sm w-full transform animate-bounce-once ${
+          gameWon ? 'bg-amber-950/90 border-amber-400 text-amber-200 shadow-[0_0_30px_rgba(245,158,11,0.3)]' : 'bg-rose-950/90 border-rose-500 text-rose-200 shadow-[0_0_30px_rgba(244,63,94,0.3)]'
+        }`}
+      >
+        <div className="text-5xl mb-3">{info.icon}</div>
+        <h2 className="text-xl font-black font-fredoka tracking-wide mb-1.5">{info.title}</h2>
+        <p className="text-xs text-slate-300 font-medium leading-relaxed mb-3">{info.subtitle}</p>
+        <div
+          className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold ${
+            gameWon ? 'bg-amber-400/20 text-amber-300 border border-amber-400/40' : 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
+          }`}
+        >
+          <span>{gameWon ? '✨ ¡Misión completada con éxito!' : '⚠️ Inténtalo de nuevo para triunfar'}</span>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 export const IllustratedWorldViewport: React.FC<IllustratedWorldViewportProps> = ({
   viewMode,
@@ -36,6 +85,8 @@ export const IllustratedWorldViewport: React.FC<IllustratedWorldViewportProps> =
   cluesFound = 0,
   combo,
   activeQuestion,
+  gameWon = false,
+  gameOver = false,
   onSelectRegion,
 }) => {
   const currentRegion = REGIONS.find((w) => w.id === currentRegionId) || REGIONS[0];
@@ -249,7 +300,7 @@ export const IllustratedWorldViewport: React.FC<IllustratedWorldViewportProps> =
   }
 
   // -------------------------------------------------------------
-  // Mecánica "Carrera" (nivel 1 en cualquier región)
+  // 2. WORLD 1: BOSQUE — Carrera Matemática (File 1 Style)
   // -------------------------------------------------------------
   if (gameMode === 'race') {
     // Real distance calculations: 0 to 500m
@@ -511,12 +562,15 @@ export const IllustratedWorldViewport: React.FC<IllustratedWorldViewportProps> =
             <span className="text-amber-300 font-bold">{rivalMeters}m</span>
           </div>
         </div>
+
+        {/* Win/Loss Status Overlay */}
+        <OutcomeOverlay gameWon={gameWon} gameOver={gameOver} gameMode={gameMode} />
       </div>
     );
   }
 
   // -------------------------------------------------------------
-  // Mecánica "Batalla" (nivel 2 en cualquier región)
+  // 3. WORLD 2: MONTAÑA — Batalla en Arena
   // -------------------------------------------------------------
   if (gameMode === 'battle') {
     return (
@@ -703,48 +757,62 @@ export const IllustratedWorldViewport: React.FC<IllustratedWorldViewportProps> =
         <div className="text-center text-xs text-slate-400 pb-1">
           ¡Resuelve la resta para lanzar un ataque cuerpo a cuerpo real contra el Guardián!
         </div>
+
+        {/* Win/Loss Status Overlay */}
+        <OutcomeOverlay gameWon={gameWon} gameOver={gameOver} gameMode={gameMode} />
       </div>
     );
   }
 
   // -------------------------------------------------------------
-  // Mecánica "Tienda" (nivel 4 en cualquier región)
+  // 4. WORLD 3: CIUDAD — Mercado del Mercader (Operaciones Reales de Tienda)
   // -------------------------------------------------------------
   if (gameMode === 'shop') {
-    const activeItems = ['🍎 Manzanas Crujientes', '🧪 Pociones de Maná', '💎 Gemas de Cristal', '🥖 Pan de Campo', '🍯 Miel Dorada'];
-    const currentItem = activeItems[questionIndex % activeItems.length];
+    const shopData = activeQuestion?.contextData;
+    const shopItems = shopData?.shopItems || [
+      { name: 'Manzanas Crujientes', icon: '🍎', unitPrice: 2, quantity: 3 },
+    ];
+    const firstItem = shopItems[0];
+    const totalCost = shopData?.totalCost || (firstItem ? firstItem.unitPrice * firstItem.quantity : 6);
+    const isChangeProblem = !!shopData?.paidWith;
 
     return (
-      <div className="relative w-full h-[320px] sm:h-[380px] md:h-[440px] overflow-hidden rounded-2xl border border-slate-700/80 bg-gradient-to-b from-[#3b0764] via-[#1e1b4b] to-[#0f172a] shadow-2xl select-none flex flex-col justify-between p-4">
+      <div className="relative w-full h-[320px] sm:h-[380px] md:h-[440px] overflow-hidden rounded-2xl border border-slate-700/80 bg-gradient-to-b from-[#3b0764] via-[#1e1b4b] to-[#0f172a] shadow-2xl select-none flex flex-col justify-between p-3 sm:p-4">
         {/* Marketplace Banner */}
-        <div className="flex items-center justify-between bg-slate-900/85 backdrop-blur-md px-4 py-2 rounded-xl border border-purple-500/40 shadow-lg">
+        <div className="flex items-center justify-between bg-slate-900/85 backdrop-blur-md px-3 sm:px-4 py-2 rounded-xl border border-purple-500/40 shadow-lg">
           <div className="flex items-center gap-2">
             <span className="text-xl">🏪</span>
             <div>
               <h4 className="text-xs font-bold text-purple-300 font-['Baloo_2']">
-                Mercado de Don Mateo — 3º Grado
+                Mercado de Don Mateo — Tienda Operativa Real
               </h4>
-              <p className="text-[10px] text-slate-400">Multiplica cantidad × precio para completar la compra real</p>
+              <p className="text-[10px] text-slate-400">
+                {isChangeProblem
+                  ? 'Calcula el cambio exacto que te sobra al pagar'
+                  : shopData?.operationKind === 'addition_combine'
+                  ? 'Suma los precios de los productos variados del carrito'
+                  : 'Multiplica precio unitario × cantidad para compras idénticas'}
+              </p>
             </div>
           </div>
           <div className="flex items-center gap-2">
             <div className="flex items-center gap-1 bg-purple-500/20 border border-purple-500/40 px-2.5 py-1 rounded-full text-xs font-bold text-purple-200">
               <span>🧺 Cesta:</span>
-              <span className="font-mono text-white">{shopCartTotal || questionIndex} uds</span>
+              <span className="font-mono text-white">{shopCartTotal || questionIndex} compras</span>
             </div>
             <div className="flex items-center gap-1 bg-amber-500/10 border border-amber-500/40 px-3 py-1 rounded-full text-xs font-mono font-bold text-amber-400 shadow-sm">
-              <span>🪙 Oro:</span>
-              <span>{120 + questionIndex * 30 + (isCorrect ? 30 : 0)}</span>
+              <span>🪙 Tu Dinero:</span>
+              <span>${100 - questionIndex * 5}</span>
             </div>
           </div>
         </div>
 
-        {/* MARKET STALL SCENE: PHYSICAL BASKET & REAL TRANSACTION */}
+        {/* MARKET STALL SCENE: PHYSICAL BASKET, CASH REGISTER & REAL TRANSACTION */}
         <div className="relative flex items-center justify-around h-56 max-w-xl mx-auto w-full">
-          {/* PLAYER'S WICKER SHOPPING BASKET */}
+          {/* PLAYER / CUSTOMER'S WICKER SHOPPING BASKET */}
           <div className="flex flex-col items-center z-20">
             <div className="bg-slate-900/80 border border-purple-400/40 px-2 py-0.5 rounded-full text-[9px] font-bold text-purple-300 mb-1">
-              Tu Cesta ({shopCartTotal || questionIndex})
+              Tu Cesta de Compras
             </div>
             <div className="w-16 h-14 bg-gradient-to-b from-amber-700 to-amber-900 rounded-b-2xl border-2 border-amber-500 shadow-xl relative flex items-center justify-center">
               {/* Basket Weave Lines */}
@@ -752,11 +820,19 @@ export const IllustratedWorldViewport: React.FC<IllustratedWorldViewportProps> =
               {/* Items currently in basket */}
               <div className="absolute -top-3 flex gap-0.5">
                 <span className="text-sm">🍎</span>
+                {(shopCartTotal || questionIndex) > 0 && <span className="text-sm">🥖</span>}
                 {(shopCartTotal || questionIndex) > 1 && <span className="text-sm">🧪</span>}
-                {(shopCartTotal || questionIndex) > 2 && <span className="text-sm">💎</span>}
+                {(shopCartTotal || questionIndex) > 2 && <span className="text-sm">🍪</span>}
               </div>
             </div>
             <div className="w-12 h-4 border-t-2 border-amber-400 rounded-t-full -mt-14 pointer-events-none" />
+
+            {/* If paying cash, show coins held in buyer's hand */}
+            {isChangeProblem && (
+              <div className="mt-1.5 bg-amber-500/20 border border-amber-400/50 px-2 py-0.5 rounded-full text-[9px] font-bold text-amber-300 flex items-center gap-1">
+                <span>💵 Pagas: ${shopData?.paidWith}</span>
+              </div>
+            )}
           </div>
 
           {/* ACTIVE DROPPING PURCHASE & FLYING COIN CASCADE */}
@@ -764,7 +840,7 @@ export const IllustratedWorldViewport: React.FC<IllustratedWorldViewportProps> =
             <div className="absolute left-1/2 top-1/4 -translate-x-1/2 pointer-events-none z-35 flex flex-col items-center">
               {/* Product Dropping into basket */}
               <div className="animate-basket-drop text-2xl -ml-24">
-                🛍️
+                {firstItem?.icon || '🛍️'}
               </div>
               {/* Gold Coins Flying to Don Mateo */}
               <div className="animate-coin-fly flex items-center gap-1 ml-20">
@@ -776,7 +852,7 @@ export const IllustratedWorldViewport: React.FC<IllustratedWorldViewportProps> =
                 </div>
               </div>
               <div className="animate-float-up bg-slate-900/90 border border-amber-400 text-amber-300 font-bold text-xs px-3 py-1 rounded-full shadow-lg mt-2 whitespace-nowrap">
-                🛎️ ¡DING! ¡Trato hecho! Producto añadido a tu cesta
+                🛎️ ¡Cuenta exacta! {isChangeProblem ? `Cambio de $${shopData?.changeDue} devuelto` : '¡Empacado en tu cesta!'}
               </div>
             </div>
           )}
@@ -784,7 +860,7 @@ export const IllustratedWorldViewport: React.FC<IllustratedWorldViewportProps> =
           {isCorrect === false && (
             <div className="absolute left-1/2 top-1/3 -translate-x-1/2 pointer-events-none z-35 flex flex-col items-center">
               <div className="animate-float-up bg-slate-900/95 border border-rose-500 text-rose-300 font-bold text-xs px-3 py-1 rounded-full shadow-lg whitespace-nowrap">
-                ❌ Don Mateo: "¡Ese cálculo no cuadra con el precio!"
+                ❌ Don Mateo: "¡Ese cálculo no cuadra con la caja!"
               </div>
             </div>
           )}
@@ -816,46 +892,70 @@ export const IllustratedWorldViewport: React.FC<IllustratedWorldViewportProps> =
             <span className="text-[10px] font-bold text-purple-300 mt-1">Don Mateo</span>
           </div>
 
-          {/* Wooden Counter with Shelves and Products */}
+          {/* Wooden Counter with Shelves and Products Active in this Transaction */}
           <div className="flex flex-col items-center">
             {/* Striped Awning */}
             <div
-              className="w-48 sm:w-56 h-8 rounded-t-lg shadow-md border-b-2 border-amber-400"
+              className="w-52 sm:w-60 h-8 rounded-t-lg shadow-md border-b-2 border-amber-400"
               style={{
                 backgroundImage:
                   'repeating-linear-gradient(90deg, #8b5cf6 0 18px, #f59e0b 18px 36px)',
               }}
             />
 
-            {/* Counter Shelf with Products */}
-            <div className="w-48 sm:w-56 bg-[#78350f] border-2 border-[#b45309] rounded-b-xl p-2 shadow-2xl flex justify-around items-center">
-              <div className="flex flex-col items-center bg-slate-900/80 p-1.5 rounded-lg border border-amber-500/40">
-                <span className="text-lg animate-breathe">🍎</span>
-                <span className="text-[8px] font-mono text-amber-300 font-bold">$3 c/u</span>
-              </div>
-              <div className="flex flex-col items-center bg-slate-900/80 p-1.5 rounded-lg border border-amber-500/40">
-                <span className="text-lg animate-breathe">🧪</span>
-                <span className="text-[8px] font-mono text-amber-300 font-bold">$4 c/u</span>
-              </div>
-              <div className="flex flex-col items-center bg-slate-900/80 p-1.5 rounded-lg border border-amber-500/40">
-                <span className="text-lg animate-breathe">💎</span>
-                <span className="text-[8px] font-mono text-amber-300 font-bold">$6 c/u</span>
-              </div>
+            {/* Counter Shelf showing the real items being purchased right now */}
+            <div className="w-52 sm:w-60 bg-[#78350f] border-2 border-[#b45309] rounded-b-xl p-2 shadow-2xl flex justify-around items-center">
+              {shopItems.slice(0, 3).map((item, idx) => (
+                <div
+                  key={idx}
+                  className="flex flex-col items-center bg-slate-900/85 p-1.5 rounded-lg border border-amber-500/40 shadow"
+                >
+                  <span className="text-lg animate-breathe">{item.icon}</span>
+                  <span className="text-[8px] font-mono text-amber-300 font-bold">
+                    {item.quantity > 1 ? `${item.quantity}×$${item.unitPrice}` : `$${item.unitPrice}`}
+                  </span>
+                </div>
+              ))}
+              {isChangeProblem && (
+                <div className="flex flex-col items-center bg-amber-950/80 p-1.5 rounded-lg border border-amber-400/60 shadow">
+                  <span className="text-lg">🧾</span>
+                  <span className="text-[8px] font-mono text-amber-300 font-bold">
+                    Total: ${shopData?.totalCost}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
         </div>
 
-        {/* Commercial Context Bar */}
-        <div className="bg-slate-900/80 border border-slate-800 px-4 py-2 rounded-xl flex items-center justify-between text-xs text-purple-200">
-          <div>🛒 <span className="font-bold">Comprando:</span> {currentItem}</div>
-          <div className="font-mono text-amber-300 font-bold">Cálculo: Cantidad × Precio</div>
+        {/* Commercial & Pedagogical Context Bar */}
+        <div className="bg-slate-900/85 backdrop-blur-sm border border-purple-500/30 px-3.5 py-2 rounded-xl flex flex-col sm:flex-row items-center justify-between text-xs text-purple-200 gap-1.5 shadow-md">
+          <div className="flex items-center gap-1.5 text-center sm:text-left">
+            <span>🛒</span>
+            <span className="font-bold text-white">Operación en Mostrador:</span>
+            <span className="text-purple-300">
+              {shopItems.map((it) => `${it.quantity > 1 ? `${it.quantity}× ` : ''}${it.name}`).join(' + ')}
+            </span>
+          </div>
+          <div className="font-mono text-amber-300 font-bold text-[11px] bg-purple-950/50 px-2.5 py-0.5 rounded border border-purple-500/40">
+            {shopData?.operationKind === 'multiplication_groups'
+              ? 'Multiplicamos: Grupos Iguales'
+              : shopData?.operationKind === 'addition_combine'
+              ? 'Sumamos: Artículos Distintos'
+              : shopData?.operationKind === 'subtraction_change'
+              ? 'Restamos: Calcular Cambio'
+              : 'Razonamiento Matemático'}
+          </div>
         </div>
+
+        {/* Win/Loss Status Overlay */}
+        <OutcomeOverlay gameWon={gameWon} gameOver={gameOver} gameMode={gameMode} />
       </div>
     );
   }
 
   // -------------------------------------------------------------
-  // Mecánica "Puente" (nivel 3 en cualquier región)
+  // 5. WORLD 4: RÍO — Puente Flotante (División)
   // -------------------------------------------------------------
   if (gameMode === 'bridge') {
     const totalSegs = totalQuestions || 5;
@@ -986,12 +1086,15 @@ export const IllustratedWorldViewport: React.FC<IllustratedWorldViewportProps> =
         <div className="text-center text-xs text-slate-400 pb-1">
           ¡Cada división exacta coloca un tramo de puente real para que tu explorador cruce el cañón!
         </div>
+
+        {/* Win/Loss Status Overlay */}
+        <OutcomeOverlay gameWon={gameWon} gameOver={gameOver} gameMode={gameMode} />
       </div>
     );
   }
 
   // -------------------------------------------------------------
-  // Mecánica "Detective" (nivel 5 en cualquier región)
+  // 6. WORLD 5: CASTILLO — Enigma del Portón Mecánico
   // -------------------------------------------------------------
   const unlockedCount = cluesFound || questionIndex + (isCorrect ? 1 : 0);
 
@@ -1101,6 +1204,9 @@ export const IllustratedWorldViewport: React.FC<IllustratedWorldViewportProps> =
       <div className="text-center text-xs text-slate-400 pb-1">
         ¡Resuelve el enigma para que el detective dispare el rayo descifrador y abra los 5 cerrojos del portón!
       </div>
+
+      {/* Win/Loss Status Overlay */}
+      <OutcomeOverlay gameWon={gameWon} gameOver={gameOver} gameMode={gameMode} />
     </div>
   );
 };

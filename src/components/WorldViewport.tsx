@@ -3,6 +3,7 @@ import { ThreeWorldCanvas } from './ThreeWorldCanvas';
 import { IllustratedWorldViewport } from './IllustratedWorldViewport';
 import { GameMode, MathQuestion, RegionDefinition } from '../types';
 import { REGIONS } from '../data/regionsData';
+import { DynamicParticleSystem } from './DynamicParticleSystem';
 import { Eye, Layers, Compass, ArrowLeft } from 'lucide-react';
 
 interface WorldViewportProps {
@@ -19,6 +20,8 @@ interface WorldViewportProps {
   shopCartTotal?: number;
   cluesFound?: number;
   combo: number;
+  gameWon?: boolean;
+  gameOver?: boolean;
   activeQuestion: MathQuestion | null;
   onSelectRegion: (regionId: string) => void;
   onToggleViewMode: () => void;
@@ -38,6 +41,8 @@ export const WorldViewport: React.FC<WorldViewportProps> = ({
   shopCartTotal = 0,
   cluesFound = 0,
   combo,
+  gameWon = false,
+  gameOver = false,
   activeQuestion,
   onSelectRegion,
   onToggleViewMode,
@@ -141,6 +146,8 @@ export const WorldViewport: React.FC<WorldViewportProps> = ({
           raceProgress={raceProgress}
           shopCartTotal={shopCartTotal}
           cluesFound={cluesFound}
+          gameWon={gameWon}
+          gameOver={gameOver}
           onSelectRegion={onSelectRegion}
           onWebGLError={() => {
             setWebGLError(true);
@@ -162,10 +169,24 @@ export const WorldViewport: React.FC<WorldViewportProps> = ({
           shopCartTotal={shopCartTotal}
           cluesFound={cluesFound}
           combo={combo}
+          gameWon={gameWon}
+          gameOver={gameOver}
           activeQuestion={activeQuestion}
           onSelectRegion={onSelectRegion}
         />
       )}
+
+      {/* Capa de partículas (reacciona a aciertos, combos, victoria/derrota) */}
+      <DynamicParticleSystem
+        gameMode={gameMode}
+        isCorrect={isCorrect}
+        gameWon={gameWon}
+        gameOver={gameOver}
+        combo={combo}
+        raceProgress={raceProgress}
+        shopCartTotal={shopCartTotal}
+        questionIndex={questionIndex}
+      />
     </div>
   );
 };

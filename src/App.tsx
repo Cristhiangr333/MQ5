@@ -438,6 +438,8 @@ export default function App({ playerName, courseName, onExit }: AppProps = {}) {
             shopCartTotal={session.shopCartTotal}
             cluesFound={session.cluesFound}
             combo={stats.combo}
+            gameWon={session.gameWon}
+            gameOver={session.gameOver}
             activeQuestion={activeQuestion}
             onSelectRegion={handleSelectRegion}
             onToggleViewMode={() => setViewMode((v) => (v === 'map' ? 'game' : 'map'))}
