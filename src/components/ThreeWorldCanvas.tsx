@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import * as THREE from 'three';
-import { WORLDS } from '../data/worldsData';
+import { REGIONS } from '../data/regionsData';
 import { GameMode } from '../types';
 import {
   createRunnerCharacter,
@@ -14,7 +14,7 @@ import {
 
 interface ThreeWorldCanvasProps {
   viewMode: 'map' | 'game';
-  currentWorldId: string;
+  currentRegionId: string;
   gameMode: GameMode;
   questionIndex: number;
   totalQuestions: number;
@@ -25,13 +25,13 @@ interface ThreeWorldCanvasProps {
   raceProgress?: number;
   shopCartTotal?: number;
   cluesFound?: number;
-  onSelectWorld?: (worldId: string) => void;
+  onSelectRegion?: (regionId: string) => void;
   onWebGLError?: () => void;
 }
 
 export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
   viewMode,
-  currentWorldId,
+  currentRegionId,
   gameMode,
   questionIndex,
   totalQuestions,
@@ -42,7 +42,7 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
   raceProgress = 0,
   shopCartTotal = 0,
   cluesFound = 0,
-  onSelectWorld,
+  onSelectRegion,
   onWebGLError,
 }) => {
   const mountRef = useRef<HTMLDivElement>(null);
@@ -51,9 +51,9 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const animFrameIdRef = useRef<number | null>(null);
 
-  // Keep onSelectWorld in ref so re-renders don't teardown WebGL
-  const onSelectWorldRef = useRef(onSelectWorld);
-  onSelectWorldRef.current = onSelectWorld;
+  // Keep onSelectRegion in ref so re-renders don't teardown WebGL
+  const onSelectRegionRef = useRef(onSelectRegion);
+  onSelectRegionRef.current = onSelectRegion;
 
   // Dynamic references for animated scene objects
   const runnerGroupRef = useRef<THREE.Group | null>(null);
@@ -252,8 +252,8 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
       if (intersects.length > 0) {
         const hit = intersects[0].object;
         const matched = mapIslandsRef.current.find((item) => item.mesh === hit);
-        if (matched && onSelectWorldRef.current) {
-          onSelectWorldRef.current(matched.id);
+        if (matched && onSelectRegionRef.current) {
+          onSelectRegionRef.current(matched.id);
         }
       }
     };
@@ -278,12 +278,12 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
     };
   }, []);
 
-  // Build the appropriate 3D world elements whenever viewMode or currentWorldId changes
+  // Build the appropriate 3D region elements whenever viewMode or currentRegionId changes
   useEffect(() => {
     const scene = sceneRef.current;
     if (!scene) return;
 
-    // Clean previous world objects (except base lights, water, and clouds)
+    // Clean previous region objects (except base lights, water, and clouds)
     const toRemove: THREE.Object3D[] = [];
     scene.children.forEach((child) => {
       if (child.name.startsWith('custom_world_')) {
@@ -307,10 +307,10 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
       targetCamPos.current.set(0, 11, 15);
       targetCamLookAt.current.set(0, 0, 0);
 
-      // Render all 5 interconnected floating islands
-      WORLDS.forEach((world) => {
+      // Render las 4 islas flotantes interconectadas (una por región/operación)
+      REGIONS.forEach((region) => {
         const islandGroup = new THREE.Group();
-        islandGroup.position.set(...world.islandPosition);
+        islandGroup.position.set(...region.islandPosition);
 
         // Island base (inverted cone cliff)
         const cliffGeo = new THREE.ConeGeometry(2.3, 2.5, 6);
@@ -329,15 +329,13 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
         // Island top grass plate
         const grassGeo = new THREE.CylinderGeometry(2.3, 2.4, 0.4, 6);
         const grassColor =
-          world.id === 'bosque'
+          region.id === 'bosque'
             ? 0x48bb5a
-            : world.id === 'montana'
+            : region.id === 'montana'
             ? 0xd8a038
-            : world.id === 'ciudad'
+            : region.id === 'ciudad'
             ? 0x8b5cf6
-            : world.id === 'rio'
-            ? 0x38bdf8
-            : 0xd946ef;
+            : 0xd946ef; // castillo
 
         const grassMat = new THREE.MeshStandardMaterial({
           color: grassColor,
@@ -351,7 +349,7 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
         islandGroup.add(grassMesh);
 
         // Island feature model
-        if (world.id === 'bosque') {
+        if (region.id === 'bosque') {
           // Stylized trees
           for (let i = 0; i < 3; i++) {
             const treeTrunk = new THREE.Mesh(
@@ -368,7 +366,7 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
             treeTrunk.add(foliage);
             islandGroup.add(treeTrunk);
           }
-        } else if (world.id === 'montana') {
+        } else if (region.id === 'montana') {
           // Rocky peak
           const peak = new THREE.Mesh(
             new THREE.ConeGeometry(1.2, 1.8, 5),
@@ -382,7 +380,7 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
           );
           snowCap.position.y = 1.5;
           islandGroup.add(snowCap);
-        } else if (world.id === 'ciudad') {
+        } else if (region.id === 'ciudad') {
           // Buildings
           const building1 = new THREE.Mesh(
             new THREE.BoxGeometry(0.8, 1.2, 0.8),
@@ -397,16 +395,7 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
           );
           building2.position.set(0.4, 1.0, 0.3);
           islandGroup.add(building2);
-        } else if (world.id === 'rio') {
-          // Water canal and mini arch bridge
-          const arch = new THREE.Mesh(
-            new THREE.TorusGeometry(0.7, 0.15, 6, 8, Math.PI),
-            new THREE.MeshStandardMaterial({ color: 0xe2e8f0, roughness: 0.3 })
-          );
-          arch.rotation.z = -Math.PI;
-          arch.position.set(0, 0.5, 0);
-          islandGroup.add(arch);
-        } else if (world.id === 'castillo') {
+        } else if (region.id === 'castillo') {
           // Castle towers
           const castleTower = new THREE.Mesh(
             new THREE.CylinderGeometry(0.4, 0.45, 1.6, 7),
@@ -425,8 +414,8 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
         // Floating status beacon / marker
         const beaconGeo = new THREE.OctahedronGeometry(0.35);
         const beaconMat = new THREE.MeshStandardMaterial({
-          color: world.id === currentWorldId ? 0xffea00 : 0xffffff,
-          emissive: world.id === currentWorldId ? 0xcc9900 : 0x222222,
+          color: region.id === currentRegionId ? 0xffea00 : 0xffffff,
+          emissive: region.id === currentRegionId ? 0xcc9900 : 0x222222,
           roughness: 0.2,
         });
         const beaconMesh = new THREE.Mesh(beaconGeo, beaconMat);
@@ -434,7 +423,7 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
         islandGroup.add(beaconMesh);
 
         rootGroup.add(islandGroup);
-        mapIslandsRef.current.push({ id: world.id, group: islandGroup, mesh: grassMesh });
+        mapIslandsRef.current.push({ id: region.id, group: islandGroup, mesh: grassMesh });
       });
 
       // Connecting energy arches between islands
@@ -442,7 +431,6 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
         [-6, 0.5, 3],
         [-2.5, 1.8, -1.5],
         [2, 0.8, -3.5],
-        [5.5, -0.2, 0.5],
         [1.5, 3.2, 4.2],
         [-6, 0.5, 3],
       ];
@@ -467,7 +455,7 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
     } else {
       // GAME MODE SCENE
       if (gameMode === 'race') {
-        // WORLD 1: BOSQUE — Carrera 3D Track
+        // Mecánica "Carrera" (nivel 1 en cualquier región) — pista 3D
         targetCamPos.current.set(0, 4.2, 8.5);
         targetCamLookAt.current.set(0, 1.2, 0);
 
@@ -537,7 +525,7 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
         rootGroup.add(runnerObj.group);
         runnerGroupRef.current = runnerObj.group;
       } else if (gameMode === 'battle') {
-        // WORLD 2: MONTAÑA — Batalla en Arena 3D
+        // Mecánica "Batalla" (nivel 2 en cualquier región) — arena 3D
         targetCamPos.current.set(0, 5, 9);
         targetCamLookAt.current.set(0, 1.2, 0);
 
@@ -587,7 +575,7 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
         rootGroup.add(enemyObj.group);
         enemyFighterRef.current = enemyObj.group;
       } else if (gameMode === 'shop') {
-        // WORLD 3: CIUDAD — Mercado Real de Don Mateo 3D
+        // Mecánica "Tienda" (nivel 4 en cualquier región) — mercado 3D
         targetCamPos.current.set(0, 4.4, 7.2);
         targetCamLookAt.current.set(0, 1.3, 0);
 
@@ -722,7 +710,7 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
         rootGroup.add(productGroup);
         shopProductMeshRef.current = productGroup;
       } else if (gameMode === 'bridge') {
-        // WORLD 4: RÍO — Puente Flotante 3D
+        // Mecánica "Puente" (nivel 3 en cualquier región) — puente flotante 3D
         targetCamPos.current.set(0, 5, 8.5);
         targetCamLookAt.current.set(0, 1.0, 0);
 
@@ -763,7 +751,7 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
         rootGroup.add(walkerObj.group);
         bridgeWalkerRef.current = walkerObj.group;
       } else if (gameMode === 'detective') {
-        // WORLD 5: CASTILLO — Gran Portón Acorazado y Cerrojos Mecánicos 3D
+        // Mecánica "Detective" (nivel 5 en cualquier región) — portón y cerrojos 3D
         targetCamPos.current.set(0, 4.4, 8.2);
         targetCamLookAt.current.set(0, 1.5, 0);
 
@@ -925,7 +913,7 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
     }
 
     scene.add(rootGroup);
-  }, [viewMode, currentWorldId, gameMode, totalQuestions, bridgeBuiltSegments, questionIndex]);
+  }, [viewMode, currentRegionId, gameMode, totalQuestions, bridgeBuiltSegments, questionIndex]);
 
   // Update Dynamic Bridge Segments and advance walker when bridgeBuiltSegments changes
   useEffect(() => {
@@ -1324,7 +1312,7 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
       // World Map Island Hovering Bobbing
       if (viewMode === 'map') {
         mapIslandsRef.current.forEach((item, idx) => {
-          item.group.position.y = WORLDS[idx]?.islandPosition[1] + Math.sin(time * 2 + idx) * 0.12;
+          item.group.position.y = REGIONS[idx]?.islandPosition[1] + Math.sin(time * 2 + idx) * 0.12;
         });
       }
 

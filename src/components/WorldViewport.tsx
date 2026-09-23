@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
 import { ThreeWorldCanvas } from './ThreeWorldCanvas';
 import { IllustratedWorldViewport } from './IllustratedWorldViewport';
-import { GameMode, MathQuestion, WorldDefinition } from '../types';
-import { WORLDS } from '../data/worldsData';
+import { GameMode, MathQuestion, RegionDefinition } from '../types';
+import { REGIONS } from '../data/regionsData';
 import { Eye, Layers, Compass, ArrowLeft } from 'lucide-react';
 
 interface WorldViewportProps {
   viewMode: 'map' | 'game';
-  currentWorldId: string;
+  currentRegionId: string;
   gameMode: GameMode;
   questionIndex: number;
   totalQuestions: number;
@@ -20,13 +20,13 @@ interface WorldViewportProps {
   cluesFound?: number;
   combo: number;
   activeQuestion: MathQuestion | null;
-  onSelectWorld: (worldId: string) => void;
+  onSelectRegion: (regionId: string) => void;
   onToggleViewMode: () => void;
 }
 
 export const WorldViewport: React.FC<WorldViewportProps> = ({
   viewMode,
-  currentWorldId,
+  currentRegionId,
   gameMode,
   questionIndex,
   totalQuestions,
@@ -39,15 +39,15 @@ export const WorldViewport: React.FC<WorldViewportProps> = ({
   cluesFound = 0,
   combo,
   activeQuestion,
-  onSelectWorld,
+  onSelectRegion,
   onToggleViewMode,
 }) => {
   // Engine: 'three' (WebGL 3D) or 'illustrated' (Crisp SVG/Isometric from user files)
   const [engine, setEngine] = useState<'three' | 'illustrated'>('illustrated');
   const [webGLError, setWebGLError] = useState(false);
 
-  const currentWorld: WorldDefinition =
-    WORLDS.find((w) => w.id === currentWorldId) || WORLDS[0];
+  const currentRegion: RegionDefinition =
+    REGIONS.find((w) => w.id === currentRegionId) || REGIONS[0];
 
   const handleToggleEngine = () => {
     if (engine === 'three') {
@@ -70,13 +70,13 @@ export const WorldViewport: React.FC<WorldViewportProps> = ({
           {viewMode === 'map' ? (
             <>
               <Compass className="w-3.5 h-3.5 text-blue-400" />
-              <span>Mapa de los 5 Mundos</span>
+              <span>Mapa de las 4 Regiones</span>
             </>
           ) : (
             <>
-              <span>{currentWorld.icon}</span>
-              <span className="font-['Baloo_2']">{currentWorld.name}</span>
-              <span className="text-[10px] text-slate-400 hidden sm:inline">({currentWorld.subtitle})</span>
+              <span>{currentRegion.icon}</span>
+              <span className="font-['Baloo_2']">{currentRegion.name}</span>
+              <span className="text-[10px] text-slate-400 hidden sm:inline">({currentRegion.competency})</span>
             </>
           )}
         </div>
@@ -130,7 +130,7 @@ export const WorldViewport: React.FC<WorldViewportProps> = ({
       {engine === 'three' && !webGLError ? (
         <ThreeWorldCanvas
           viewMode={viewMode}
-          currentWorldId={currentWorldId}
+          currentRegionId={currentRegionId}
           gameMode={gameMode}
           questionIndex={questionIndex}
           totalQuestions={totalQuestions}
@@ -141,7 +141,7 @@ export const WorldViewport: React.FC<WorldViewportProps> = ({
           raceProgress={raceProgress}
           shopCartTotal={shopCartTotal}
           cluesFound={cluesFound}
-          onSelectWorld={onSelectWorld}
+          onSelectRegion={onSelectRegion}
           onWebGLError={() => {
             setWebGLError(true);
             setEngine('illustrated');
@@ -150,7 +150,7 @@ export const WorldViewport: React.FC<WorldViewportProps> = ({
       ) : (
         <IllustratedWorldViewport
           viewMode={viewMode}
-          currentWorldId={currentWorldId}
+          currentRegionId={currentRegionId}
           gameMode={gameMode}
           questionIndex={questionIndex}
           totalQuestions={totalQuestions}
@@ -163,7 +163,7 @@ export const WorldViewport: React.FC<WorldViewportProps> = ({
           cluesFound={cluesFound}
           combo={combo}
           activeQuestion={activeQuestion}
-          onSelectWorld={onSelectWorld}
+          onSelectRegion={onSelectRegion}
         />
       )}
     </div>

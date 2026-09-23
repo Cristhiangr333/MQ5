@@ -1,11 +1,11 @@
 import React from 'react';
-import { WORLDS } from '../data/worldsData';
-import { GameMode, WorldDefinition, MathQuestion } from '../types';
+import { REGIONS } from '../data/regionsData';
+import { GameMode, RegionDefinition, MathQuestion } from '../types';
 import { Sparkles, Shield, Heart, Zap, Award, CheckCircle2, Lock } from 'lucide-react';
 
 interface IllustratedWorldViewportProps {
   viewMode: 'map' | 'game';
-  currentWorldId: string;
+  currentRegionId: string;
   gameMode: GameMode;
   questionIndex: number;
   totalQuestions: number;
@@ -18,12 +18,12 @@ interface IllustratedWorldViewportProps {
   cluesFound?: number;
   combo: number;
   activeQuestion: MathQuestion | null;
-  onSelectWorld: (worldId: string) => void;
+  onSelectRegion: (regionId: string) => void;
 }
 
 export const IllustratedWorldViewport: React.FC<IllustratedWorldViewportProps> = ({
   viewMode,
-  currentWorldId,
+  currentRegionId,
   gameMode,
   questionIndex,
   totalQuestions,
@@ -36,9 +36,9 @@ export const IllustratedWorldViewport: React.FC<IllustratedWorldViewportProps> =
   cluesFound = 0,
   combo,
   activeQuestion,
-  onSelectWorld,
+  onSelectRegion,
 }) => {
-  const currentWorld = WORLDS.find((w) => w.id === currentWorldId) || WORLDS[0];
+  const currentRegion = REGIONS.find((w) => w.id === currentRegionId) || REGIONS[0];
 
   // -------------------------------------------------------------
   // 1. WORLD MAP VIEW (Directly inspired by File 3: Mapa del Mundo v2)
@@ -132,7 +132,7 @@ export const IllustratedWorldViewport: React.FC<IllustratedWorldViewportProps> =
           {/* ================= ISLAND 1: BOSQUE (Carrera) ================= */}
           <g
             id="island-btn-bosque"
-            onClick={() => onSelectWorld('bosque')}
+            onClick={() => onSelectRegion('bosque')}
             className="cursor-pointer group"
             transform="translate(130, 360)"
           >
@@ -157,14 +157,14 @@ export const IllustratedWorldViewport: React.FC<IllustratedWorldViewportProps> =
             {/* Badge */}
             <rect x="25" y="10" width="110" height="26" rx="13" fill="#1e293b" stroke="#3fa34d" strokeWidth="2" />
             <text x="80" y="27" textAnchor="middle" fill="#86efac" fontSize="11" fontWeight="bold" fontFamily="Baloo 2">
-              🏃 Bosque · Carrera
+              🌳 Bosque de la Suma
             </text>
           </g>
 
           {/* ================= ISLAND 2: MONTAÑA (Batalla) ================= */}
           <g
             id="island-btn-montana"
-            onClick={() => onSelectWorld('montana')}
+            onClick={() => onSelectRegion('montana')}
             className="cursor-pointer group"
             transform="translate(350, 220)"
           >
@@ -183,14 +183,14 @@ export const IllustratedWorldViewport: React.FC<IllustratedWorldViewportProps> =
             {/* Badge */}
             <rect x="20" y="10" width="120" height="26" rx="13" fill="#1e293b" stroke="#f59e0b" strokeWidth="2" />
             <text x="80" y="27" textAnchor="middle" fill="#fde68a" fontSize="11" fontWeight="bold" fontFamily="Baloo 2">
-              ⚔️ Montaña · Batalla
+              ⛰️ Montaña de la Resta
             </text>
           </g>
 
           {/* ================= ISLAND 3: CIUDAD (Tienda) ================= */}
           <g
             id="island-btn-ciudad"
-            onClick={() => onSelectWorld('ciudad')}
+            onClick={() => onSelectRegion('ciudad')}
             className="cursor-pointer group"
             transform="translate(600, 280)"
           >
@@ -208,39 +208,14 @@ export const IllustratedWorldViewport: React.FC<IllustratedWorldViewportProps> =
             {/* Badge */}
             <rect x="25" y="10" width="110" height="26" rx="13" fill="#1e293b" stroke="#8b5cf6" strokeWidth="2" />
             <text x="80" y="27" textAnchor="middle" fill="#e9d5ff" fontSize="11" fontWeight="bold" fontFamily="Baloo 2">
-              🛒 Ciudad · Tienda
+              🏙️ Ciudad de la Multiplicación
             </text>
           </g>
 
-          {/* ================= ISLAND 4: RÍO (Puente) ================= */}
-          <g
-            id="island-btn-rio"
-            onClick={() => onSelectWorld('rio')}
-            className="cursor-pointer group"
-            transform="translate(710, 90)"
-          >
-            <ellipse cx="80" cy="120" rx="85" ry="38" fill="#030712" opacity="0.5" />
-            <path
-              d="M 10 75 Q 80 120 150 75 L 150 100 Q 80 145 10 100 Z"
-              fill="#1e3a5f"
-              filter="url(#islandShadow)"
-            />
-            {/* River Gorge Top */}
-            <ellipse cx="80" cy="70" rx="75" ry="36" fill="url(#riverGrad)" stroke="#7dd3fc" strokeWidth="2" />
-            {/* Bridge Arches mini */}
-            <rect x="45" y="66" width="70" height="8" rx="3" fill="#f59e0b" stroke="#78350f" strokeWidth="1" />
-            <text x="80" y="62" textAnchor="middle" fontSize="13">🌉</text>
-            {/* Badge */}
-            <rect x="25" y="10" width="110" height="26" rx="13" fill="#1e293b" stroke="#0ea5e9" strokeWidth="2" />
-            <text x="80" y="27" textAnchor="middle" fill="#bae6fd" fontSize="11" fontWeight="bold" fontFamily="Baloo 2">
-              🌉 Río · Puente
-            </text>
-          </g>
-
-          {/* ================= ISLAND 5: CASTILLO (Enigma) ================= */}
+          {/* ================= ISLAND 4: CASTILLO (División) ================= */}
           <g
             id="island-btn-castillo"
-            onClick={() => onSelectWorld('castillo')}
+            onClick={() => onSelectRegion('castillo')}
             className="cursor-pointer group"
             transform="translate(210, 70)"
           >
@@ -255,11 +230,11 @@ export const IllustratedWorldViewport: React.FC<IllustratedWorldViewportProps> =
             {/* Citadel Towers mini */}
             <rect x="68" y="38" width="24" height="28" rx="3" fill="#831843" stroke="#fbcfe8" strokeWidth="1" />
             <polygon points="65,38 80,20 95,38" fill="#fbbf24" />
-            <text x="80" y="58" textAnchor="middle" fontSize="12">🕵️</text>
+            <text x="80" y="58" textAnchor="middle" fontSize="12">➗</text>
             {/* Badge */}
             <rect x="20" y="2" width="120" height="26" rx="13" fill="#1e293b" stroke="#ec4899" strokeWidth="2" />
             <text x="80" y="19" textAnchor="middle" fill="#fbcfe8" fontSize="11" fontWeight="bold" fontFamily="Baloo 2">
-              🕵️ Castillo · Enigma
+              🏰 Castillo de la División
             </text>
           </g>
         </svg>
@@ -274,7 +249,7 @@ export const IllustratedWorldViewport: React.FC<IllustratedWorldViewportProps> =
   }
 
   // -------------------------------------------------------------
-  // 2. WORLD 1: BOSQUE — Carrera Matemática (File 1 Style)
+  // Mecánica "Carrera" (nivel 1 en cualquier región)
   // -------------------------------------------------------------
   if (gameMode === 'race') {
     // Real distance calculations: 0 to 500m
@@ -541,7 +516,7 @@ export const IllustratedWorldViewport: React.FC<IllustratedWorldViewportProps> =
   }
 
   // -------------------------------------------------------------
-  // 3. WORLD 2: MONTAÑA — Batalla en Arena
+  // Mecánica "Batalla" (nivel 2 en cualquier región)
   // -------------------------------------------------------------
   if (gameMode === 'battle') {
     return (
@@ -733,7 +708,7 @@ export const IllustratedWorldViewport: React.FC<IllustratedWorldViewportProps> =
   }
 
   // -------------------------------------------------------------
-  // 4. WORLD 3: CIUDAD — Mercado del Mercader (Multiplicación)
+  // Mecánica "Tienda" (nivel 4 en cualquier región)
   // -------------------------------------------------------------
   if (gameMode === 'shop') {
     const activeItems = ['🍎 Manzanas Crujientes', '🧪 Pociones de Maná', '💎 Gemas de Cristal', '🥖 Pan de Campo', '🍯 Miel Dorada'];
@@ -880,7 +855,7 @@ export const IllustratedWorldViewport: React.FC<IllustratedWorldViewportProps> =
   }
 
   // -------------------------------------------------------------
-  // 5. WORLD 4: RÍO — Puente Flotante (División)
+  // Mecánica "Puente" (nivel 3 en cualquier región)
   // -------------------------------------------------------------
   if (gameMode === 'bridge') {
     const totalSegs = totalQuestions || 5;
@@ -893,7 +868,7 @@ export const IllustratedWorldViewport: React.FC<IllustratedWorldViewportProps> =
             <span className="text-xl">🌉</span>
             <div>
               <h4 className="text-xs font-bold text-sky-300 font-['Baloo_2']">
-                Puente del Río de la División — 3º Grado
+                Puente de {currentRegion.name} — 3º Grado
               </h4>
               <p className="text-[10px] text-slate-400">
                 Tramos construidos: {bridgeBuiltSegments} de {totalSegs} pilares
@@ -1016,7 +991,7 @@ export const IllustratedWorldViewport: React.FC<IllustratedWorldViewportProps> =
   }
 
   // -------------------------------------------------------------
-  // 6. WORLD 5: CASTILLO — Enigma del Portón Mecánico
+  // Mecánica "Detective" (nivel 5 en cualquier región)
   // -------------------------------------------------------------
   const unlockedCount = cluesFound || questionIndex + (isCorrect ? 1 : 0);
 
