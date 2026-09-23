@@ -1,12 +1,26 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
-import { Check, Copy, LogOut, Plus, Users } from 'lucide-react';
+import { Check, Copy, Flame, LogOut, Plus, Star, Users } from 'lucide-react';
 import { useAuth } from '../auth/AuthProvider';
 import { supabase } from '../lib/supabase';
 import { friendlyError } from '../lib/errors';
 import { cleanName } from '../lib/validation';
-import type { CourseRow, StudentRow } from '../lib/types';
-import { Button, Card, ErrorBanner, Field, FullScreenError, FullScreenLoader, Screen } from '../components/ui';
+import { fetchCourseProgress } from '../lib/teacherProgress';
+import type { CourseRow, StudentProgressSummary, StudentRow } from '../lib/types';
+import { Button, Card, ErrorBanner, Field, FullScreenError, FullScreenLoader, Screen, Spinner } from '../components/ui';
+import { StudentDetailModal } from '../components/StudentDetailModal';
+
+/** "hace 2 días", "hoy", "Nunca ha jugado" a partir de un timestamp o null. */
+function timeAgo(iso: string | null): string {
+  if (!iso) return 'Nunca ha jugado';
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const days = Math.floor(diffMs / 86_400_000);
+  if (days <= 0) return 'Jugó hoy';
+  if (days === 1) return 'Jugó ayer';
+  if (days < 30) return `Jugó hace ${days} días`;
+  const months = Math.floor(days / 30);
+  return `Jugó hace ${months} ${months === 1 ? 'mes' : 'meses'}`;
+}
 
 export default function TeacherPanel() {
   const auth = useAuth();
@@ -24,6 +38,26 @@ export default function TeacherPanel() {
   const [createError, setCreateError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [progressByCourse, setProgressByCourse] = useState<
+    Record<string, { status: 'loading' | 'ready' | 'error'; rows: StudentProgressSummary[]; message?: string }>
+  >({});
+  const [openStudent, setOpenStudent] = useState<{ id: string; name: string } | null>(null);
+
+  const loadCourseProgress = useCallback(async (courseId: string) => {
+    setProgressByCourse((prev) => {
+      if (prev[courseId]) return prev; // ya cargado o cargando: no repetir la consulta
+      return { ...prev, [courseId]: { status: 'loading', rows: [] } };
+    });
+    try {
+      const rows = await fetchCourseProgress(courseId);
+      setProgressByCourse((prev) => ({ ...prev, [courseId]: { status: 'ready', rows } }));
+    } catch (err) {
+      setProgressByCourse((prev) => ({
+        ...prev,
+        [courseId]: { status: 'error', rows: [], message: friendlyError(err) },
+      }));
+    }
+  }, []);
 
   const load = useCallback(async () => {
     setState({ status: 'loading', message: null });
@@ -146,19 +180,62 @@ export default function TeacherPanel() {
                       </div>
                     </div>
 
-                    <details className="mt-4 group">
+                    <details
+                      className="mt-4 group"
+                      onToggle={(e) => {
+                        if ((e.target as HTMLDetailsElement).open) void loadCourseProgress(course.id);
+                      }}
+                    >
                       <summary className="cursor-pointer min-h-10 inline-flex items-center text-sm font-bold text-slate-300 hover:text-white">
-                        Ver estudiantes
+                        Ver estudiantes y su progreso
                       </summary>
                       {list.length === 0 ? (
                         <p className="text-sm text-slate-400 mt-2">Aún no hay estudiantes. Comparte el código para que se unan.</p>
+                      ) : progressByCourse[course.id]?.status === 'loading' || !progressByCourse[course.id] ? (
+                        <div className="flex items-center gap-2 text-sm text-slate-400 mt-3 py-2">
+                          <Spinner className="w-4 h-4" /> Cargando el progreso de cada estudiante...
+                        </div>
+                      ) : progressByCourse[course.id]?.status === 'error' ? (
+                        <div className="mt-3">
+                          <ErrorBanner message={progressByCourse[course.id]?.message ?? null} />
+                          <ul className="mt-2 grid sm:grid-cols-2 gap-x-6 gap-y-1 text-sm">
+                            {list.map((s) => (
+                              <li key={s.id} className="py-1 border-b border-slate-800">
+                                {s.first_name} {s.last_name}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
                       ) : (
-                        <ul className="mt-2 grid sm:grid-cols-2 gap-x-6 gap-y-1 text-sm">
-                          {list.map((s) => (
-                            <li key={s.id} className="py-1 border-b border-slate-800">
-                              {s.first_name} {s.last_name}
-                            </li>
-                          ))}
+                        <ul className="mt-2 divide-y divide-slate-800">
+                          {list.map((s) => {
+                            const progress = progressByCourse[course.id]?.rows.find((r) => r.student_id === s.id);
+                            return (
+                              <li key={s.id} className="py-2.5 flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5">
+                                <span className="text-sm font-bold text-slate-100">
+                                  {s.first_name} {s.last_name}
+                                </span>
+                                {progress ? (
+                                  <button
+                                    onClick={() => setOpenStudent({ id: s.id, name: `${s.first_name} ${s.last_name}` })}
+                                    className="flex items-center gap-3 text-xs text-slate-300 hover:text-white rounded-lg px-2 py-1 -mx-2 hover:bg-slate-800/70 transition-colors"
+                                  >
+                                    <span className="inline-flex items-center gap-1 font-bold text-amber-300">
+                                      <Flame className="w-3.5 h-3.5" aria-hidden="true" /> {progress.total_xp} XP
+                                    </span>
+                                    <span className="inline-flex items-center gap-1">
+                                      <Star className="w-3.5 h-3.5 text-blue-300" aria-hidden="true" />
+                                      {progress.levels_passed}/20 niveles
+                                    </span>
+                                    <span className="hidden sm:inline text-slate-400">{timeAgo(progress.last_played_at)}</span>
+                                    <span className="text-emerald-300 underline">Ver detalle</span>
+                                  </button>
+                                ) : (
+                                  <span className="text-xs text-slate-500">Sin datos</span>
+                                )}
+                              </li>
+                            );
+                          })}
                         </ul>
                       )}
                     </details>
@@ -168,6 +245,14 @@ export default function TeacherPanel() {
             })}
           </ul>
         </>
+      )}
+
+      {openStudent && (
+        <StudentDetailModal
+          studentId={openStudent.id}
+          studentName={openStudent.name}
+          onClose={() => setOpenStudent(null)}
+        />
       )}
     </Screen>
   );
