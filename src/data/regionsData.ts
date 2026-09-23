@@ -17,7 +17,7 @@ export const REGIONS: RegionDefinition[] = [
     icon: '🌳',
     competency: 'Sumas de 1 cifra',
     description: 'Recorre el bosque resolviendo sumas de 1 cifra a través de los 5 desafíos.',
-    islandPosition: [-6, 0.5, 3],
+    islandPosition: [-9.5, 0.6, 4.5],
   },
   {
     id: 'montana',
@@ -30,7 +30,7 @@ export const REGIONS: RegionDefinition[] = [
     icon: '⛰️',
     competency: 'Restas de 1 cifra',
     description: 'Sube la montaña resolviendo restas de 1 cifra a través de los 5 desafíos.',
-    islandPosition: [-2.5, 1.8, -1.5],
+    islandPosition: [-4.0, 2.5, -4.5],
   },
   {
     id: 'ciudad',
@@ -43,7 +43,7 @@ export const REGIONS: RegionDefinition[] = [
     icon: '🏙️',
     competency: 'Multiplicaciones de 1 cifra',
     description: 'Explora la ciudad resolviendo multiplicaciones a través de los 5 desafíos.',
-    islandPosition: [2, 0.8, -3.5],
+    islandPosition: [4.2, 1.2, -6.0],
   },
   {
     id: 'castillo',
@@ -56,7 +56,7 @@ export const REGIONS: RegionDefinition[] = [
     icon: '🏰',
     competency: 'Divisiones de 1 cifra',
     description: 'Conquista el castillo resolviendo divisiones a través de los 5 desafíos.',
-    islandPosition: [1.5, 3.2, 4.2],
+    islandPosition: [2.5, 4.2, 6.8],
   },
 ];
 
