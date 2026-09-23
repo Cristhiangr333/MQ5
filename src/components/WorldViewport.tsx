@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ThreeWorldCanvas } from './ThreeWorldCanvas';
 import { IllustratedWorldViewport } from './IllustratedWorldViewport';
+import { DynamicParticleSystem } from './DynamicParticleSystem';
 import { GameMode, MathQuestion, RegionDefinition } from '../types';
 import { REGIONS } from '../data/regionsData';
 import { Eye, Layers, Compass, ArrowLeft } from 'lucide-react';
@@ -18,6 +19,8 @@ interface WorldViewportProps {
   raceProgress?: number;
   shopCartTotal?: number;
   cluesFound?: number;
+  gameWon?: boolean;
+  gameOver?: boolean;
   combo: number;
   activeQuestion: MathQuestion | null;
   onSelectRegion: (regionId: string) => void;
@@ -37,6 +40,8 @@ export const WorldViewport: React.FC<WorldViewportProps> = ({
   raceProgress = 0,
   shopCartTotal = 0,
   cluesFound = 0,
+  gameWon = false,
+  gameOver = false,
   combo,
   activeQuestion,
   onSelectRegion,
@@ -166,6 +171,18 @@ export const WorldViewport: React.FC<WorldViewportProps> = ({
           onSelectRegion={onSelectRegion}
         />
       )}
+
+      {/* Capa de partículas dinámicas (reacciona a aciertos, combos, victoria) */}
+      <DynamicParticleSystem
+        gameMode={gameMode}
+        isCorrect={isCorrect}
+        gameWon={gameWon}
+        gameOver={gameOver}
+        combo={combo}
+        raceProgress={raceProgress}
+        shopCartTotal={shopCartTotal}
+        questionIndex={questionIndex}
+      />
     </div>
   );
 };

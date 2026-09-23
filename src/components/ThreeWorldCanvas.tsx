@@ -1413,6 +1413,49 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
           Puente construido: {bridgeBuiltSegments} / {totalQuestions} bloques
         </div>
       )}
+
+      {/* ========================================================= */}
+      {/* PARTÍCULAS AMBIENTALES DE FONDO (CSS, SUTILES, POR REGIÓN) */}
+      {/* ========================================================= */}
+      <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
+        {/* Bosque de la Suma: hojas flotando en el fondo */}
+        {viewMode === 'game' && currentRegionId === 'bosque' && (
+          <div className="absolute inset-0">
+            <span className="absolute left-[8%] -top-4 w-3.5 h-2 rounded-full bg-emerald-400/40 animate-leaf-1 blur-[0.3px]" />
+            <span className="absolute left-[32%] -top-4 w-4 h-2.5 rounded-full bg-green-500/35 animate-leaf-2 blur-[0.4px]" />
+            <span className="absolute right-[22%] -top-4 w-3 h-2 rounded-full bg-lime-400/35 animate-leaf-3 blur-[0.3px]" />
+            <span className="absolute right-[8%] -top-4 w-4 h-2.5 rounded-full bg-emerald-600/30 animate-leaf-4 blur-[0.4px]" />
+          </div>
+        )}
+
+        {/* Montaña de la Resta: neblina baja y suave */}
+        {viewMode === 'game' && currentRegionId === 'montana' && (
+          <div className="absolute inset-0">
+            <div className="absolute -left-[30%] top-1/4 w-[160%] h-24 bg-gradient-to-r from-transparent via-orange-500/10 to-transparent blur-2xl animate-mist-slow" />
+            <div className="absolute -left-[20%] top-1/2 w-[150%] h-28 bg-gradient-to-r from-transparent via-slate-400/10 to-transparent blur-3xl animate-mist-reverse" />
+          </div>
+        )}
+
+        {/* Ciudad de la Multiplicación: chispas tenues de mercado */}
+        {viewMode === 'game' && currentRegionId === 'ciudad' && (
+          <div className="absolute inset-0">
+            <span className="absolute left-[18%] bottom-14 w-2 h-2 rounded-full bg-amber-400/40 blur-[0.6px] animate-spark-1" />
+            <span className="absolute left-[48%] bottom-16 w-1.5 h-1.5 rounded-full bg-orange-300/45 blur-[0.5px] animate-spark-2" />
+            <span className="absolute right-[24%] bottom-12 w-2 h-2 rounded-full bg-yellow-300/35 blur-[0.7px] animate-spark-3" />
+            <span className="absolute right-[10%] bottom-20 w-1.5 h-1.5 rounded-full bg-amber-500/30 blur-[0.6px] animate-spark-1" style={{ animationDelay: '-2.4s' }} />
+          </div>
+        )}
+
+        {/* Castillo de la División: polvillo místico flotante */}
+        {viewMode === 'game' && currentRegionId === 'castillo' && (
+          <div className="absolute inset-0">
+            <span className="absolute left-[12%] top-24 w-2.5 h-2.5 rounded-full bg-purple-400/30 blur-[0.8px] animate-mystic-1" />
+            <span className="absolute left-[36%] top-36 w-2 h-2 rounded-full bg-indigo-300/35 blur-[0.6px] animate-mystic-2" />
+            <span className="absolute right-[28%] top-20 w-2.5 h-2.5 rounded-full bg-violet-400/30 blur-[0.7px] animate-mystic-3" />
+            <span className="absolute right-[14%] top-32 w-1.5 h-1.5 rounded-full bg-fuchsia-300/25 blur-[0.6px] animate-mystic-1" style={{ animationDelay: '-4.2s' }} />
+          </div>
+        )}
+      </div>
     </div>
   );
 };

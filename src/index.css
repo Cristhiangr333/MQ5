@@ -415,3 +415,135 @@
 .animate-basket-drop {
   animation: basketDrop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
 }
+
+/* =========================================================
+   PARTÍCULAS AMBIENTALES DE FONDO POR REGIÓN (CSS, SUTIL)
+   Portadas desde el export de AI Studio (zip -7). Se omite la
+   animación de "río" porque ese mundo ya no existe en el modelo
+   actual de 4 regiones (ADR-003).
+   ========================================================= */
+
+/* Bosque de la Suma: hojas cayendo suavemente */
+@keyframes forestLeafDrift {
+  0% {
+    transform: translate3d(0, -20px, 0) rotate(0deg) scale(0.85);
+    opacity: 0;
+  }
+  15% {
+    opacity: 0.55;
+  }
+  50% {
+    transform: translate3d(24px, 140px, 0) rotate(180deg) scale(1);
+    opacity: 0.65;
+  }
+  85% {
+    opacity: 0.45;
+  }
+  100% {
+    transform: translate3d(-18px, 320px, 0) rotate(360deg) scale(0.9);
+    opacity: 0;
+  }
+}
+
+/* Montaña de la Resta: neblina lenta */
+@keyframes mountainMistFlow {
+  0% {
+    transform: translateX(-30%) translateY(0) scaleY(1);
+    opacity: 0.12;
+  }
+  50% {
+    transform: translateX(10%) translateY(-10px) scaleY(1.08);
+    opacity: 0.28;
+  }
+  100% {
+    transform: translateX(45%) translateY(-5px) scaleY(0.95);
+    opacity: 0.08;
+  }
+}
+
+/* Ciudad de la Multiplicación: chispas tenues de mercado */
+@keyframes shopSparkFloat {
+  0% {
+    transform: translateY(20px) translateX(0) scale(0.5);
+    opacity: 0;
+  }
+  20% {
+    opacity: 0.6;
+    transform: translateY(0px) translateX(6px) scale(1);
+  }
+  70% {
+    opacity: 0.45;
+    transform: translateY(-80px) translateX(-8px) scale(0.85);
+  }
+  100% {
+    transform: translateY(-150px) translateX(12px) scale(0.4);
+    opacity: 0;
+  }
+}
+
+/* Castillo de la División: polvillo místico flotante */
+@keyframes castleMysticMote {
+  0% {
+    transform: translate3d(0, 0, 0) scale(0.8);
+    opacity: 0.15;
+  }
+  35% {
+    transform: translate3d(16px, -35px, 0) scale(1.15);
+    opacity: 0.55;
+  }
+  70% {
+    transform: translate3d(-12px, -80px, 0) scale(0.9);
+    opacity: 0.4;
+  }
+  100% {
+    transform: translate3d(8px, -140px, 0) scale(0.7);
+    opacity: 0;
+  }
+}
+
+.animate-leaf-1 {
+  animation: forestLeafDrift 9s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+.animate-leaf-2 {
+  animation: forestLeafDrift 11.5s cubic-bezier(0.35, 0, 0.25, 1) infinite;
+  animation-delay: -3s;
+}
+.animate-leaf-3 {
+  animation: forestLeafDrift 8.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  animation-delay: -5.5s;
+}
+.animate-leaf-4 {
+  animation: forestLeafDrift 13s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  animation-delay: -7.5s;
+}
+
+.animate-mist-slow {
+  animation: mountainMistFlow 16s ease-in-out infinite alternate;
+}
+.animate-mist-reverse {
+  animation: mountainMistFlow 22s ease-in-out infinite alternate-reverse;
+}
+
+.animate-spark-1 {
+  animation: shopSparkFloat 4.2s ease-out infinite;
+}
+.animate-spark-2 {
+  animation: shopSparkFloat 5.5s ease-out infinite;
+  animation-delay: -1.8s;
+}
+.animate-spark-3 {
+  animation: shopSparkFloat 6.8s ease-out infinite;
+  animation-delay: -3.4s;
+}
+
+.animate-mystic-1 {
+  animation: castleMysticMote 7s ease-in-out infinite;
+}
+.animate-mystic-2 {
+  animation: castleMysticMote 9.5s ease-in-out infinite;
+  animation-delay: -3s;
+}
+.animate-mystic-3 {
+  animation: castleMysticMote 11s ease-in-out infinite;
+  animation-delay: -6s;
+}
