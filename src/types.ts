@@ -37,6 +37,13 @@ export interface GameModeConfig {
   sortOrder: number;
 }
 
+export interface ShopItemDetail {
+  name: string;
+  icon: string;
+  unitPrice: number;
+  quantity: number;
+}
+
 /** Pregunta lista para jugarse (ya con las opciones mezcladas). */
 export interface MathQuestion {
   id: number;
@@ -46,6 +53,22 @@ export interface MathQuestion {
   options: number[];
   correct: number;
   explanation: string;
+  hint?: string;
+  // Opcional: contexto extra para la puesta en escena de "Tienda" (nombre del
+  // artículo, precio, si es un problema de vuelto, etc.). Nuestras preguntas de
+  // Supabase no lo traen todavía, así que siempre llega undefined y la interfaz
+  // usa sus valores de respaldo genéricos (ver IllustratedWorldViewport).
+  contextData?: {
+    itemName?: string;
+    unitPrice?: number;
+    quantity?: number;
+    operationKind?: 'multiplication_groups' | 'addition_combine' | 'subtraction_change' | 'division_split' | 'concept_reason';
+    whyOperation?: string;
+    shopItems?: ShopItemDetail[];
+    paidWith?: number;
+    totalCost?: number;
+    changeDue?: number;
+  };
 }
 
 /** Estado de un nivel (una combinación región + modo) para el mapa/tira de niveles. */
