@@ -1,9 +1,9 @@
 import React from 'react';
 import { Volume2, VolumeX, Map, BarChart3, RotateCcw } from 'lucide-react';
-import { WorldDefinition } from '../types';
+import { LevelDisplayInfo } from '../types';
 
 interface GameHUDProps {
-  currentWorld: WorldDefinition;
+  currentLevel: LevelDisplayInfo;
   viewMode: 'map' | 'game';
   questionIndex: number;
   totalQuestions: number;
@@ -19,7 +19,7 @@ interface GameHUDProps {
 }
 
 export const GameHUD: React.FC<GameHUDProps> = ({
-  currentWorld,
+  currentLevel,
   viewMode,
   questionIndex,
   totalQuestions,
@@ -46,7 +46,7 @@ export const GameHUD: React.FC<GameHUDProps> = ({
               ? 'bg-blue-600 border-blue-400 text-white shadow-md shadow-blue-600/30'
               : 'bg-slate-800/80 border-slate-700 text-slate-200 hover:bg-slate-700'
           }`}
-          title="Ver mapa de los 5 mundos"
+          title="Ver mapa de las 4 regiones"
         >
           <Map className="w-4 h-4 text-amber-400" />
           <span>{viewMode === 'map' ? 'Mapa 3D' : 'Ir al Mapa'}</span>
@@ -54,13 +54,13 @@ export const GameHUD: React.FC<GameHUDProps> = ({
 
         <div className="hidden sm:block">
           <div className="flex items-center gap-2">
-            <span className="text-xl">{currentWorld.icon}</span>
+            <span className="text-xl">{currentLevel.icon}</span>
             <div>
               <h2 className="text-sm font-extrabold leading-none text-slate-100 font-['Baloo_2']">
-                {currentWorld.name}
+                {currentLevel.name}
               </h2>
               <p className="text-[11px] text-slate-400 font-medium leading-tight">
-                {currentWorld.subtitle}
+                {currentLevel.subtitle}
               </p>
             </div>
           </div>

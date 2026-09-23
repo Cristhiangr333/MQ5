@@ -1,19 +1,21 @@
 import React, { useEffect } from 'react';
 import confetti from 'canvas-confetti';
-import { Trophy, RotateCcw, Compass, Star } from 'lucide-react';
-import { WorldDefinition } from '../types';
+import { Trophy, RotateCcw, Compass, Loader2, AlertTriangle } from 'lucide-react';
+import { LevelDisplayInfo } from '../types';
 
 interface GameOverModalProps {
   isOpen: boolean;
   isWon: boolean;
   score: number;
   xpGained: number;
+  submitState: 'submitting' | 'error' | 'done';
+  submitErrorMessage?: string | null;
   correctCount: number;
   totalCount: number;
-  currentWorld: WorldDefinition;
+  currentLevel: LevelDisplayInfo;
   onReplay: () => void;
   onGoToMap: () => void;
-  onNextWorld?: () => void;
+  onNextLevel?: () => void;
 }
 
 export const GameOverModal: React.FC<GameOverModalProps> = ({
@@ -21,12 +23,14 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
   isWon,
   score,
   xpGained,
+  submitState,
+  submitErrorMessage,
   correctCount,
   totalCount,
-  currentWorld,
+  currentLevel,
   onReplay,
   onGoToMap,
-  onNextWorld,
+  onNextLevel,
 }) => {
   useEffect(() => {
     if (isOpen && isWon) {
@@ -61,12 +65,12 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
         </div>
 
         <h2 className="text-2xl sm:text-3xl font-extrabold font-['Baloo_2'] text-white">
-          {isWon ? `¡${currentWorld.shortName} Superado!` : '¡Sin vidas!'}
+          {isWon ? `¡${currentLevel.shortName} Superado!` : '¡Sin vidas!'}
         </h2>
 
         <p className="text-sm text-slate-400 mt-1 mb-6">
           {isWon
-            ? '¡Excelente cálculo mental! Has completado este mundo con éxito.'
+            ? '¡Excelente cálculo mental! Has completado este nivel con éxito.'
             : 'Los errores son parte del aprendizaje. ¡Vuelve a intentarlo y supéralo!'}
         </p>
 
@@ -79,27 +83,42 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
             <div className="text-[11px] text-slate-400">Correctas</div>
           </div>
           <div>
-            <div className="text-xl font-bold font-mono text-amber-400">
-              {score}
-            </div>
+            <div className="text-xl font-bold font-mono text-amber-400">{score}</div>
             <div className="text-[11px] text-slate-400">Puntaje</div>
           </div>
           <div>
-            <div className="text-xl font-bold font-mono text-blue-400">
-              +{xpGained}
-            </div>
+            {submitState === 'submitting' ? (
+              <div className="flex justify-center">
+                <Loader2 className="w-5 h-5 animate-spin text-blue-400" />
+              </div>
+            ) : submitState === 'error' ? (
+              <div className="text-xl font-bold font-mono text-rose-400">--</div>
+            ) : (
+              <div className="text-xl font-bold font-mono text-blue-400">+{xpGained}</div>
+            )}
             <div className="text-[11px] text-slate-400">XP Ganado</div>
           </div>
         </div>
 
+        {submitState === 'error' && (
+          <div className="mb-4 p-3 rounded-xl bg-rose-950/60 border border-rose-500/40 text-rose-200 text-xs text-left flex items-start gap-2">
+            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+            <span>
+              No pudimos guardar este resultado en el servidor{submitErrorMessage ? `: ${submitErrorMessage}` : '.'} Revisa tu
+              conexión; si vuelve a pasar, avísale a tu docente.
+            </span>
+          </div>
+        )}
+
         {/* Buttons */}
         <div className="space-y-2.5">
-          {isWon && onNextWorld && (
+          {isWon && onNextLevel && (
             <button
-              onClick={onNextWorld}
+              onClick={onNextLevel}
               className="w-full py-3.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm sm:text-base flex items-center justify-center gap-2 transition-all shadow-lg shadow-emerald-600/30"
             >
-              <span>🚀 Viajar al Siguiente Mundo</span>
+              <Trophy className="w-4 h-4" />
+              <span>Siguiente nivel</span>
             </button>
           )}
 
@@ -108,7 +127,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
             className="w-full py-3 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-sm flex items-center justify-center gap-2 transition-colors border border-slate-700"
           >
             <RotateCcw className="w-4 h-4" />
-            <span>Jugar de nuevo este mundo</span>
+            <span>Jugar de nuevo este nivel</span>
           </button>
 
           <button
@@ -116,7 +135,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
             className="w-full py-2.5 px-4 rounded-xl text-slate-400 hover:text-white font-medium text-xs sm:text-sm flex items-center justify-center gap-1.5 transition-colors"
           >
             <Compass className="w-4 h-4" />
-            <span>Volver al Mapa de los 5 Mundos</span>
+            <span>Volver al mapa de las 4 regiones</span>
           </button>
         </div>
       </div>

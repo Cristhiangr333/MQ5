@@ -1,17 +1,57 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { WORLDS, generateQuestionsForWorld } from './data/worldsData';
-import { WorldDefinition, PlayerStats, GameSessionState } from './types';
+import { REGIONS, findRegion, findGameMode } from './data/regionsData';
+import { fetchProgress, fetchQuestionsForLevel, submitRound } from './lib/game';
+import { GameMode, GameSessionState, PlayerStats, RegionProgress, LevelDisplayInfo } from './types';
 import { playSfx, toggleAudioMute, getIsMuted } from './utils/audio';
 import { WorldViewport } from './components/WorldViewport';
 import { GameHUD } from './components/GameHUD';
 import { QuestionPanel } from './components/QuestionPanel';
-import { WorldCardStrip } from './components/WorldCardStrip';
+import { RegionLevelStrip } from './components/RegionLevelStrip';
 import { GameOverModal } from './components/GameOverModal';
-import { Play, Compass, Sparkles, Volume2, Shield, LogOut } from 'lucide-react';
+import { Play, Compass, LogOut, Loader2, AlertTriangle } from 'lucide-react';
 
-const QUESTIONS_PER_WORLD = 5;
 const MAX_LIVES = 3;
-const TIME_PER_QUESTION_MS = 8000;
+const TIME_PER_QUESTION_MS = 12000;
+// Respuesta imposible: marca la pregunta como respondida (mal) cuando se agota el
+// tiempo, para que la ronda cuente como "completa" ante submit_round (ver ADR-007).
+const TIMEOUT_SENTINEL_ANSWER = -1;
+
+function emptySession(regionId: string, gameModeId: GameMode): GameSessionState {
+  return {
+    regionId,
+    gameModeId,
+    activeQuestionIndex: 0,
+    totalQuestions: 0,
+    questions: [],
+    answers: [],
+    isAnswered: false,
+    selectedOption: null,
+    isCorrect: null,
+    timeLeft: TIME_PER_QUESTION_MS,
+    maxTime: TIME_PER_QUESTION_MS,
+    isTimerActive: false,
+    feedbackText: '',
+    gameOver: false,
+    gameWon: false,
+    isSubmitting: false,
+    submitError: null,
+    xpEarned: null,
+    raceProgress: 0,
+    heroHp: 100,
+    enemyHp: 100,
+    bridgeBuiltSegments: 0,
+    shopCartTotal: 0,
+    cluesFound: 0,
+  };
+}
+
+/** El nivel a retomar al entrar a una región desde el mapa: el primer sin 3 estrellas. */
+function pickResumeLevel(region: RegionProgress | undefined): GameMode {
+  if (!region || region.levels.length === 0) return 'race';
+  const unlocked = region.levels.filter((l) => l.unlocked);
+  const notMastered = unlocked.find((l) => l.bestStars < 3);
+  return (notMastered ?? unlocked[unlocked.length - 1] ?? region.levels[0]).gameModeId;
+}
 
 interface AppProps {
   playerName?: string;
@@ -20,103 +60,142 @@ interface AppProps {
 }
 
 export default function App({ playerName, courseName, onExit }: AppProps = {}) {
-  const [viewMode, setViewMode] = useState<'map' | 'game'>('game');
-  const [currentWorldId, setCurrentWorldId] = useState<string>('bosque');
+  const [viewMode, setViewMode] = useState<'map' | 'game'>('map');
   const [isMuted, setIsMuted] = useState<boolean>(getIsMuted());
 
-  // Persistent Player Stats
-  const [stats, setStats] = useState<PlayerStats>(() => {
-    return {
-      score: 0,
-      stars: 3,
-      xp: 40,
-      lives: MAX_LIVES,
-      maxLives: MAX_LIVES,
-      combo: 0,
-      highestCombo: 0,
-      worldProgress: {
-        bosque: { completed: false, highScore: 0, stars: 0, questionsAnswered: 0, correctAnswers: 0 },
-        montana: { completed: false, highScore: 0, stars: 0, questionsAnswered: 0, correctAnswers: 0 },
-        ciudad: { completed: false, highScore: 0, stars: 0, questionsAnswered: 0, correctAnswers: 0 },
-        rio: { completed: false, highScore: 0, stars: 0, questionsAnswered: 0, correctAnswers: 0 },
-        castillo: { completed: false, highScore: 0, stars: 0, questionsAnswered: 0, correctAnswers: 0 },
-      },
-      totalCorrect: 0,
-      totalAnswered: 0,
-    };
+  // Progreso real (4 regiones × 5 niveles) leído de get_my_progress()
+  const [regionsProgress, setRegionsProgress] = useState<RegionProgress[]>([]);
+  const [totalXp, setTotalXp] = useState(0);
+  const [progressLoading, setProgressLoading] = useState(true);
+  const [progressError, setProgressError] = useState<string | null>(null);
+
+  const [currentRegionId, setCurrentRegionId] = useState<string>('bosque');
+  const [currentGameModeId, setCurrentGameModeId] = useState<GameMode>('race');
+
+  const [stats, setStats] = useState<PlayerStats>({
+    totalXp: 0,
+    score: 0,
+    lives: MAX_LIVES,
+    maxLives: MAX_LIVES,
+    combo: 0,
+    highestCombo: 0,
   });
 
-  // Active Session State
-  const [session, setSession] = useState<GameSessionState>(() => {
-    const initialQuestions = generateQuestionsForWorld('bosque', QUESTIONS_PER_WORLD);
-    return {
-      currentWorldId: 'bosque',
-      activeQuestionIndex: 0,
-      totalQuestions: QUESTIONS_PER_WORLD,
-      questions: initialQuestions,
-      isAnswered: false,
-      selectedOption: null,
-      isCorrect: null,
-      timeLeft: TIME_PER_QUESTION_MS,
-      maxTime: TIME_PER_QUESTION_MS,
-      isTimerActive: true,
-      feedbackText: '',
-      gameOver: false,
-      gameWon: false,
-      raceProgress: 0,
-      heroHp: 100,
-      enemyHp: 100,
-      bridgeBuiltSegments: 0,
-      shopCartTotal: 0,
-      cluesFound: 0,
-    };
-  });
+  const [session, setSession] = useState<GameSessionState>(() => emptySession('bosque', 'race'));
+  const [levelLoading, setLevelLoading] = useState(false);
+  const [levelError, setLevelError] = useState<string | null>(null);
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const submittedRef = useRef(false);
 
-  const currentWorld: WorldDefinition =
-    WORLDS.find((w) => w.id === currentWorldId) || WORLDS[0];
+  const currentRegion = findRegion(currentRegionId);
+  const currentGameMode = findGameMode(currentGameModeId);
 
-  // Start or restart a world session
-  const initWorldSession = useCallback((worldId: string) => {
-    const questions = generateQuestionsForWorld(worldId, QUESTIONS_PER_WORLD);
-    setCurrentWorldId(worldId);
-    setViewMode('game');
-    setSession({
-      currentWorldId: worldId,
-      activeQuestionIndex: 0,
-      totalQuestions: QUESTIONS_PER_WORLD,
-      questions,
-      isAnswered: false,
-      selectedOption: null,
-      isCorrect: null,
-      timeLeft: TIME_PER_QUESTION_MS,
-      maxTime: TIME_PER_QUESTION_MS,
-      isTimerActive: true,
-      feedbackText: '',
-      gameOver: false,
-      gameWon: false,
-      raceProgress: 0,
-      heroHp: 100,
-      enemyHp: 100,
-      bridgeBuiltSegments: 0,
-      shopCartTotal: 0,
-      cluesFound: 0,
-    });
-    setStats((prev) => ({ ...prev, lives: MAX_LIVES, combo: 0 }));
+  const loadProgress = useCallback(async () => {
+    setProgressLoading(true);
+    setProgressError(null);
+    try {
+      const { regions, totalXp: xp } = await fetchProgress();
+      setRegionsProgress(regions);
+      setTotalXp(xp);
+      setStats((prev) => ({ ...prev, totalXp: xp }));
+    } catch (err) {
+      setProgressError(err instanceof Error ? err.message : 'No pudimos cargar tu progreso.');
+    } finally {
+      setProgressLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    void loadProgress();
+  }, [loadProgress]);
+
+  // Carga las preguntas reales del nivel y arranca la ronda
+  const initLevelSession = useCallback(async (regionId: string, gameModeId: GameMode) => {
+    setCurrentRegionId(regionId);
+    setCurrentGameModeId(gameModeId);
+    setViewMode('game');
+    setLevelLoading(true);
+    setLevelError(null);
+    submittedRef.current = false;
+    try {
+      const { questions, config } = await fetchQuestionsForLevel(regionId, gameModeId);
+      if (questions.length === 0) {
+        setLevelError('Todavía no hay preguntas cargadas para este nivel. Avísale a tu docente.');
+        setLevelLoading(false);
+        return;
+      }
+      const maxTime = config.secondsPerQuestion * 1000;
+      setSession({
+        ...emptySession(regionId, gameModeId),
+        totalQuestions: questions.length,
+        questions,
+        timeLeft: maxTime,
+        maxTime,
+        isTimerActive: true,
+      });
+      setStats((prev) => ({ ...prev, lives: config.lives, maxLives: config.lives, combo: 0, score: 0 }));
+    } catch (err) {
+      setLevelError(err instanceof Error ? err.message : 'No pudimos cargar las preguntas de este nivel.');
+    } finally {
+      setLevelLoading(false);
+    }
+  }, []);
+
+  // Al elegir una región desde el mapa 3D: retoma el nivel más avanzado sin dominar
+  const handleSelectRegion = useCallback(
+    (regionId: string) => {
+      const region = regionsProgress.find((r) => r.regionId === regionId);
+      if (region && !region.unlocked) return; // región bloqueada: no hacer nada
+      const gameModeId = pickResumeLevel(region);
+      playSfx('click');
+      void initLevelSession(regionId, gameModeId);
+    },
+    [regionsProgress, initLevelSession],
+  );
+
+  // Al elegir un nivel específico desde la tira región/nivel
+  const handleSelectLevel = useCallback(
+    (regionId: string, gameModeId: GameMode) => {
+      playSfx('click');
+      void initLevelSession(regionId, gameModeId);
+    },
+    [initLevelSession],
+  );
+
+  // Envía la ronda terminada a submit_round() y refresca el progreso real
+  const finishRound = useCallback(
+    async (finalAnswers: { question_id: number; answer: number }[]) => {
+      if (submittedRef.current) return;
+      submittedRef.current = true;
+      setSession((prev) => ({ ...prev, isSubmitting: true, submitError: null }));
+      try {
+        const result = await submitRound(currentRegionId, currentGameModeId, finalAnswers);
+        setStats((prev) => ({ ...prev, totalXp: prev.totalXp + result.xp_earned }));
+        setSession((prev) => ({ ...prev, isSubmitting: false, xpEarned: result.xp_earned }));
+        await loadProgress();
+      } catch (err) {
+        setSession((prev) => ({
+          ...prev,
+          isSubmitting: false,
+          submitError: err instanceof Error ? err.message : 'No pudimos guardar tu resultado. Revisa tu conexión.',
+        }));
+      }
+    },
+    [currentRegionId, currentGameModeId, loadProgress],
+  );
 
   // Answer handler
   const handleSelectOption = useCallback(
-    (option: number | string | null) => {
+    (option: number | null) => {
       if (session.isAnswered || session.gameOver || session.gameWon) return;
 
       const currentQ = session.questions[session.activeQuestionIndex];
       if (!currentQ) return;
 
       const correct = option !== null && option === currentQ.correct;
+      const submittedAnswer = option ?? TIMEOUT_SENTINEL_ANSWER;
 
-      // Update HP / game specific progression
       let newHeroHp = session.heroHp;
       let newEnemyHp = session.enemyHp;
       let newBridge = session.bridgeBuiltSegments;
@@ -125,75 +204,36 @@ export default function App({ playerName, courseName, onExit }: AppProps = {}) {
       let newShopCartTotal = session.shopCartTotal;
 
       if (correct) {
-        if (currentWorld.mode === 'race') {
-          // Advance on track by 20%
-          newRaceProgress = Math.min(100, (session.raceProgress || 0) + 20);
-        } else if (currentWorld.mode === 'battle') {
-          newEnemyHp = Math.max(0, session.enemyHp - 25);
-        } else if (currentWorld.mode === 'shop') {
-          newShopCartTotal = (session.shopCartTotal || 0) + 1;
-        } else if (currentWorld.mode === 'bridge') {
-          newBridge = Math.min(QUESTIONS_PER_WORLD, session.bridgeBuiltSegments + 1);
-        } else if (currentWorld.mode === 'detective') {
-          newClues = Math.min(5, session.cluesFound + 1);
-        }
+        if (currentGameModeId === 'race') newRaceProgress = Math.min(100, (session.raceProgress || 0) + 20);
+        else if (currentGameModeId === 'battle') newEnemyHp = Math.max(0, session.enemyHp - 25);
+        else if (currentGameModeId === 'shop') newShopCartTotal = (session.shopCartTotal || 0) + 1;
+        else if (currentGameModeId === 'bridge')
+          newBridge = Math.min(session.totalQuestions, session.bridgeBuiltSegments + 1);
+        else if (currentGameModeId === 'detective') newClues = Math.min(5, session.cluesFound + 1);
       } else {
-        if (currentWorld.mode === 'race') {
-          // Retroceder de verdad si pierde: retrocede 14%
-          newRaceProgress = Math.max(0, (session.raceProgress || 0) - 14);
-        } else if (currentWorld.mode === 'battle') {
-          newHeroHp = Math.max(0, session.heroHp - 20);
-        }
+        if (currentGameModeId === 'race') newRaceProgress = Math.max(0, (session.raceProgress || 0) - 14);
+        else if (currentGameModeId === 'battle') newHeroHp = Math.max(0, session.heroHp - 20);
       }
 
-      // Update Player Stats
+      const updatedAnswers = [...session.answers, { question_id: currentQ.id, answer: submittedAnswer }];
+
       setStats((prev) => {
         const newCombo = correct ? prev.combo + 1 : 0;
         const highestCombo = Math.max(prev.highestCombo, newCombo);
         const newLives = correct ? prev.lives : Math.max(0, prev.lives - 1);
         const comboBonus = Math.min(newCombo, 4) * 5;
         const ptsGained = correct ? 20 + comboBonus : 0;
-        const newScore = prev.score + ptsGained;
-        const newXp = prev.xp + (correct ? 15 : 0);
-
-        const currentProg = prev.worldProgress[currentWorldId] || {
-          completed: false,
-          highScore: 0,
-          stars: 0,
-          questionsAnswered: 0,
-          correctAnswers: 0,
-        };
-
-        const updatedProgress = {
-          ...prev.worldProgress,
-          [currentWorldId]: {
-            ...currentProg,
-            questionsAnswered: currentProg.questionsAnswered + 1,
-            correctAnswers: currentProg.correctAnswers + (correct ? 1 : 0),
-            highScore: Math.max(currentProg.highScore, newScore),
-          },
-        };
-
         return {
           ...prev,
-          score: newScore,
-          xp: newXp,
+          score: prev.score + ptsGained,
           lives: newLives,
           combo: newCombo,
           highestCombo,
-          totalAnswered: prev.totalAnswered + 1,
-          totalCorrect: prev.totalCorrect + (correct ? 1 : 0),
-          worldProgress: updatedProgress,
         };
       });
 
-      // Audio feedback
       if (correct) {
-        if (stats.combo >= 2) {
-          playSfx('combo');
-        } else {
-          playSfx('correct');
-        }
+        playSfx(stats.combo >= 2 ? 'combo' : 'correct');
       } else {
         playSfx('wrong');
       }
@@ -217,34 +257,24 @@ export default function App({ playerName, courseName, onExit }: AppProps = {}) {
         bridgeBuiltSegments: newBridge,
         cluesFound: newClues,
         shopCartTotal: newShopCartTotal,
+        answers: updatedAnswers,
       }));
 
-      // Check next question or endgame
       setTimeout(() => {
         setSession((prev) => {
           const nextIndex = prev.activeQuestionIndex + 1;
           const isOutLives = !correct && stats.lives - 1 <= 0;
-          const isFinished = nextIndex >= QUESTIONS_PER_WORLD;
+          const isFinished = nextIndex >= prev.totalQuestions;
 
           if (isOutLives) {
             playSfx('gameover');
+            void finishRound(updatedAnswers);
             return { ...prev, gameOver: true, isTimerActive: false };
           }
 
           if (isFinished) {
             playSfx('victory');
-            // Mark world completed
-            setStats((s) => ({
-              ...s,
-              worldProgress: {
-                ...s.worldProgress,
-                [currentWorldId]: {
-                  ...s.worldProgress[currentWorldId],
-                  completed: true,
-                  stars: 3,
-                },
-              },
-            }));
+            void finishRound(updatedAnswers);
             return { ...prev, gameWon: true, isTimerActive: false };
           }
 
@@ -254,14 +284,14 @@ export default function App({ playerName, courseName, onExit }: AppProps = {}) {
             isAnswered: false,
             selectedOption: null,
             isCorrect: null,
-            timeLeft: TIME_PER_QUESTION_MS,
+            timeLeft: prev.maxTime,
             isTimerActive: true,
             feedbackText: '',
           };
         });
       }, 1400);
     },
-    [session, currentWorld, stats.combo, stats.lives, currentWorldId]
+    [session, currentGameModeId, stats.combo, stats.lives, finishRound],
   );
 
   // Timer Tick Effect
@@ -313,18 +343,53 @@ export default function App({ playerName, courseName, onExit }: AppProps = {}) {
 
   const activeQuestion = session.questions[session.activeQuestionIndex] || null;
 
-  // Next world helper
-  const handleNextWorld = () => {
-    const currentIndex = WORLDS.findIndex((w) => w.id === currentWorldId);
-    const nextIndex = (currentIndex + 1) % WORLDS.length;
-    initWorldSession(WORLDS[nextIndex].id);
+  const currentLevelInfo: LevelDisplayInfo = {
+    icon: currentGameMode.icon,
+    name: `${currentRegion.name} · ${currentGameMode.name}`,
+    shortName: currentGameMode.name,
+    subtitle: `Nivel ${currentGameMode.sortOrder} de 5 · ${currentRegion.shortName}`,
   };
+
+  // Siguiente nivel dentro de la misma región (para el botón del modal de victoria)
+  const handleNextLevel = () => {
+    const region = regionsProgress.find((r) => r.regionId === currentRegionId);
+    const next = region?.levels.find((l) => l.sortOrder === currentGameMode.sortOrder + 1);
+    if (next && next.unlocked) {
+      initLevelSession(currentRegionId, next.gameModeId);
+    } else {
+      setViewMode('map');
+      setSession((s) => ({ ...s, gameOver: false, gameWon: false }));
+    }
+  };
+
+  if (progressLoading) {
+    return (
+      <div className="min-h-screen bg-[#142138] text-slate-100 flex items-center justify-center gap-3">
+        <Loader2 className="w-6 h-6 animate-spin text-amber-400" />
+        <p className="text-sm font-semibold">Cargando tu progreso...</p>
+      </div>
+    );
+  }
+
+  if (progressError) {
+    return (
+      <div className="min-h-screen bg-[#142138] text-slate-100 flex flex-col items-center justify-center gap-3 p-6 text-center">
+        <AlertTriangle className="w-8 h-8 text-rose-400" />
+        <p className="text-sm font-semibold">No pudimos cargar tus datos.</p>
+        <p className="text-xs text-slate-400">{progressError}</p>
+        <button
+          onClick={() => void loadProgress()}
+          className="mt-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 font-bold text-sm"
+        >
+          Reintentar
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#142138] text-slate-100 flex flex-col items-center justify-start p-3 sm:p-5 md:p-6 font-['Nunito_Sans',sans-serif]">
-      {/* Cabinet Container */}
       <main className="w-full max-w-4xl flex flex-col gap-4">
-        {/* Quién juega */}
         {playerName && (
           <div className="flex items-center justify-between gap-3 px-1">
             <p className="text-sm font-bold text-slate-200 truncate">
@@ -343,28 +408,26 @@ export default function App({ playerName, courseName, onExit }: AppProps = {}) {
           </div>
         )}
 
-        {/* Top HUD */}
         <GameHUD
-          currentWorld={currentWorld}
+          currentLevel={currentLevelInfo}
           viewMode={viewMode}
           questionIndex={session.activeQuestionIndex}
           totalQuestions={session.totalQuestions}
-          score={stats.score}
+          score={stats.totalXp}
           lives={stats.lives}
           maxLives={stats.maxLives}
           combo={stats.combo}
           isMuted={isMuted}
           onToggleSound={() => setIsMuted(toggleAudioMute())}
           onOpenMap={() => setViewMode((v) => (v === 'map' ? 'game' : 'map'))}
-          onResetGame={() => initWorldSession(currentWorldId)}
+          onResetGame={() => initLevelSession(currentRegionId, currentGameModeId)}
         />
 
-        {/* World Viewport (Dual-Engine: 3D WebGL / Modo Ilustrado Fiel) */}
         <section className="relative w-full">
           <WorldViewport
             viewMode={viewMode}
-            currentWorldId={currentWorldId}
-            gameMode={currentWorld.mode}
+            currentRegionId={currentRegionId}
+            gameMode={currentGameModeId}
             questionIndex={session.activeQuestionIndex}
             totalQuestions={session.totalQuestions}
             isCorrect={session.isCorrect}
@@ -376,28 +439,41 @@ export default function App({ playerName, courseName, onExit }: AppProps = {}) {
             cluesFound={session.cluesFound}
             combo={stats.combo}
             activeQuestion={activeQuestion}
-            onSelectWorld={(id) => {
-              playSfx('click');
-              initWorldSession(id);
-            }}
+            onSelectRegion={handleSelectRegion}
             onToggleViewMode={() => setViewMode((v) => (v === 'map' ? 'game' : 'map'))}
           />
         </section>
 
-        {/* Dynamic Lower Area: Either Question Panel or World Map Explainer */}
         {viewMode === 'game' ? (
-          <QuestionPanel
-            question={activeQuestion}
-            timeLeft={session.timeLeft}
-            maxTime={session.maxTime}
-            isAnswered={session.isAnswered}
-            selectedOption={session.selectedOption}
-            isCorrect={session.isCorrect}
-            combo={stats.combo}
-            feedbackText={session.feedbackText}
-            onSelectOption={handleSelectOption}
-            gameMode={currentWorld.mode}
-          />
+          levelLoading ? (
+            <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-8 text-center text-slate-300 flex items-center justify-center gap-2">
+              <Loader2 className="w-5 h-5 animate-spin text-amber-400" />
+              Cargando preguntas del nivel...
+            </div>
+          ) : levelError ? (
+            <div className="bg-slate-900/90 border border-rose-500/40 rounded-2xl p-6 text-center text-rose-200">
+              <p className="font-bold mb-2">{levelError}</p>
+              <button
+                onClick={() => initLevelSession(currentRegionId, currentGameModeId)}
+                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 font-bold text-sm text-white"
+              >
+                Reintentar
+              </button>
+            </div>
+          ) : (
+            <QuestionPanel
+              question={activeQuestion}
+              timeLeft={session.timeLeft}
+              maxTime={session.maxTime}
+              isAnswered={session.isAnswered}
+              selectedOption={session.selectedOption}
+              isCorrect={session.isCorrect}
+              combo={stats.combo}
+              feedbackText={session.feedbackText}
+              onSelectOption={(opt) => handleSelectOption(typeof opt === 'number' ? opt : Number(opt))}
+              gameMode={currentGameModeId}
+            />
+          )
         ) : (
           <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-6 text-center backdrop-blur-md">
             <h3 className="text-xl font-extrabold font-['Baloo_2'] text-white flex items-center justify-center gap-2">
@@ -406,7 +482,7 @@ export default function App({ playerName, courseName, onExit }: AppProps = {}) {
             </h3>
             <p className="text-sm text-slate-300 max-w-lg mx-auto mt-2 leading-relaxed">
               Interactúa con el modelo 3D arriba arrastrando con el ratón o el dedo para rotar la cámara.
-              Haz clic en cualquier isla o selecciona uno de los mundos abajo para comenzar a jugar.
+              Haz clic en cualquier isla para viajar a esa región, o elige un nivel específico abajo.
             </p>
             <div className="mt-4 flex flex-wrap justify-center gap-3">
               <button
@@ -414,23 +490,21 @@ export default function App({ playerName, courseName, onExit }: AppProps = {}) {
                 className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 font-bold text-sm text-white flex items-center gap-2 shadow-lg shadow-emerald-600/30 transition-all"
               >
                 <Play className="w-4 h-4" />
-                <span>Continuar Jugando: {currentWorld.name}</span>
+                <span>Continuar jugando: {currentLevelInfo.name}</span>
               </button>
             </div>
           </div>
         )}
 
-        {/* 5 Worlds Navigation Cards Strip */}
-        <WorldCardStrip
-          currentWorldId={currentWorldId}
-          stats={stats}
-          onSelectWorld={(worldId) => {
-            playSfx('click');
-            initWorldSession(worldId);
-          }}
+        <RegionLevelStrip
+          regions={REGIONS}
+          progress={regionsProgress}
+          totalXp={totalXp}
+          currentRegionId={currentRegionId}
+          currentGameModeId={currentGameModeId}
+          onSelectLevel={handleSelectLevel}
         />
 
-        {/* Pedagogical Footer Note */}
         <footer className="text-center text-xs text-slate-500 py-3 flex flex-wrap items-center justify-center gap-3 border-t border-slate-800/60">
           <span>🎮 MathQuest 5 · Para estudiantes de tercer grado</span>
           <span>·</span>
@@ -438,21 +512,22 @@ export default function App({ playerName, courseName, onExit }: AppProps = {}) {
         </footer>
       </main>
 
-      {/* Game Over / Victory Modal */}
       <GameOverModal
         isOpen={session.gameOver || session.gameWon}
         isWon={session.gameWon}
         score={stats.score}
-        xpGained={session.gameWon ? 50 : 15}
-        correctCount={stats.worldProgress[currentWorldId]?.correctAnswers || 0}
+        xpGained={session.xpEarned ?? 0}
+        submitState={session.isSubmitting ? 'submitting' : session.submitError ? 'error' : 'done'}
+        submitErrorMessage={session.submitError}
+        correctCount={session.answers.filter((a) => session.questions.find((q) => q.id === a.question_id)?.correct === a.answer).length}
         totalCount={session.totalQuestions}
-        currentWorld={currentWorld}
-        onReplay={() => initWorldSession(currentWorldId)}
+        currentLevel={currentLevelInfo}
+        onReplay={() => initLevelSession(currentRegionId, currentGameModeId)}
         onGoToMap={() => {
           setViewMode('map');
           setSession((s) => ({ ...s, gameOver: false, gameWon: false }));
         }}
-        onNextWorld={session.gameWon ? handleNextWorld : undefined}
+        onNextLevel={session.gameWon ? handleNextLevel : undefined}
       />
     </div>
   );
