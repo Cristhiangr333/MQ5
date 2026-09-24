@@ -139,8 +139,39 @@ function createMountainPanorama(): THREE.Group {
 }
 
 // ==========================================
-// HIGH-FIDELITY PROCEDURAL TEXTURE GENERATORS
+// HIGH-FIDELITY PROCEDURAL TEXTURE GENERATORS (CACHED)
 // ==========================================
+
+const proceduralTextureCache = new Map<string, THREE.CanvasTexture>();
+
+function getCachedTexture(key: string, creator: () => THREE.CanvasTexture): THREE.CanvasTexture {
+  let tex = proceduralTextureCache.get(key);
+  if (!tex) {
+    tex = creator();
+    proceduralTextureCache.set(key, tex);
+  }
+  return tex;
+}
+
+// Liberación profunda de memoria GPU (geometrías y materiales) para objetos
+// dinámicos que se reconstruyen a cada cambio de juego/región. Sin esto, cada
+// cambio deja geometrías y materiales huérfanos en la GPU (fuga de memoria
+// en sesiones largas).
+function disposeObjectHierarchy(obj: THREE.Object3D) {
+  obj.traverse((child) => {
+    if ((child as THREE.Mesh).isMesh) {
+      const mesh = child as THREE.Mesh;
+      if (mesh.geometry) {
+        mesh.geometry.dispose();
+      }
+      if (Array.isArray(mesh.material)) {
+        mesh.material.forEach((m) => m.dispose());
+      } else if (mesh.material) {
+        mesh.material.dispose();
+      }
+    }
+  });
+}
 
 // Helper: Seeded pseudo-random noise for reproducible crisp patterns
 function createProceduralNoiseCanvas(
@@ -160,6 +191,7 @@ function createProceduralNoiseCanvas(
 
 // 1. Lush Rolling Meadow Grass Texture (Forest/Race World)
 function createMeadowGrassTexture(): THREE.CanvasTexture {
+  return getCachedTexture('meadow_grass', () => {
   const canvas = createProceduralNoiseCanvas(512, 512, (ctx, w, h) => {
     // Rich gradient base
     const grad = ctx.createLinearGradient(0, 0, w, h);
@@ -200,10 +232,12 @@ function createMeadowGrassTexture(): THREE.CanvasTexture {
   tex.wrapT = THREE.RepeatWrapping;
   tex.repeat.set(6, 8);
   return tex;
+  });
 }
 
 // 2. Compacted Earthen Trail with Pebbles (Race track)
 function createEarthenTrackTexture(): THREE.CanvasTexture {
+  return getCachedTexture('earthen_track', () => {
   const canvas = createProceduralNoiseCanvas(512, 512, (ctx, w, h) => {
     // Warm ochre dirt base
     const grad = ctx.createLinearGradient(0, 0, 0, h);
@@ -241,10 +275,12 @@ function createEarthenTrackTexture(): THREE.CanvasTexture {
   tex.wrapT = THREE.RepeatWrapping;
   tex.repeat.set(2, 8);
   return tex;
+  });
 }
 
 // 3. Volcanic Basalt & Obsidian Arena Floor Texture (Mountain Arena)
 function createVolcanicBasaltTexture(): THREE.CanvasTexture {
+  return getCachedTexture('volcanic_basalt', () => {
   const canvas = createProceduralNoiseCanvas(512, 512, (ctx, w, h) => {
     // Deep charcoal & dark obsidian base
     ctx.fillStyle = '#1e293b';
@@ -285,10 +321,12 @@ function createVolcanicBasaltTexture(): THREE.CanvasTexture {
   tex.wrapT = THREE.RepeatWrapping;
   tex.repeat.set(3, 3);
   return tex;
+  });
 }
 
 // 4. European Medieval Cobblestone Plaza Texture (City Market World)
 function createCobblestonePlazaTexture(): THREE.CanvasTexture {
+  return getCachedTexture('cobblestone_plaza', () => {
   const canvas = createProceduralNoiseCanvas(512, 512, (ctx, w, h) => {
     // Mortar bedding background
     ctx.fillStyle = '#334155';
@@ -330,10 +368,12 @@ function createCobblestonePlazaTexture(): THREE.CanvasTexture {
   tex.wrapT = THREE.RepeatWrapping;
   tex.repeat.set(4, 4);
   return tex;
+  });
 }
 
 // 5. River Canyon Rock & Sediment Strata Texture (River World)
 function createRiverSedimentTexture(): THREE.CanvasTexture {
+  return getCachedTexture('river_sediment', () => {
   const canvas = createProceduralNoiseCanvas(512, 512, (ctx, w, h) => {
     // Geological stratified layers
     const grad = ctx.createLinearGradient(0, 0, 0, h);
@@ -362,10 +402,12 @@ function createRiverSedimentTexture(): THREE.CanvasTexture {
   tex.wrapT = THREE.RepeatWrapping;
   tex.repeat.set(2, 4);
   return tex;
+  });
 }
 
 // 6. Royal Gothic Citadel Flagstone & Rune Texture (Castle World)
 function createCastleCourtyardTexture(): THREE.CanvasTexture {
+  return getCachedTexture('castle_courtyard', () => {
   const canvas = createProceduralNoiseCanvas(512, 512, (ctx, w, h) => {
     // Royal midnight slate base
     ctx.fillStyle = '#1e1b4b';
@@ -401,6 +443,7 @@ function createCastleCourtyardTexture(): THREE.CanvasTexture {
   tex.wrapT = THREE.RepeatWrapping;
   tex.repeat.set(4, 4);
   return tex;
+  });
 }
 
 // Ambient floating motes (pollen, fireflies, sparks)
@@ -908,7 +951,10 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
         toRemove.push(child);
       }
     });
-    toRemove.forEach((c) => scene.remove(c));
+    toRemove.forEach((c) => {
+      scene.remove(c);
+      disposeObjectHierarchy(c);
+    });
 
     mapIslandsRef.current = [];
     runnerGroupRef.current = null;
