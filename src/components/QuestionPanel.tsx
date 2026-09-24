@@ -270,7 +270,7 @@ export const QuestionPanel: React.FC<QuestionPanelProps> = ({
                     : 'absolute top-1 left-2 text-[10px] text-slate-500 font-normal'
                 }`}
               >
-                {idx + 1}
+                {String.fromCharCode(65 + idx)}
               </span>
               <span className={hasLongTextOptions ? 'leading-snug' : ''}>
                 {typeof option === 'number' && isShopMode ? `$${option}` : option}

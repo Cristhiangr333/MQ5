@@ -49,9 +49,27 @@ const OutcomeOverlay: React.FC<{
   const info = gameWon ? winTitles[gameMode] : loseTitles[gameMode];
 
   return (
-    <div className="absolute inset-0 z-40 flex flex-col items-center justify-center bg-slate-950/85 backdrop-blur-md animate-fade-in pointer-events-none p-4 text-center">
+    <div className="absolute inset-0 z-40 flex flex-col items-center justify-center bg-slate-950/75 backdrop-blur-sm animate-fade-in pointer-events-none p-4 text-center overflow-hidden">
+      {/* Confeti CSS en cascada, solo en victoria */}
+      {gameWon && (
+        <div className="absolute inset-0 pointer-events-none overflow-hidden">
+          {Array.from({ length: 22 }).map((_, i) => (
+            <div
+              key={i}
+              className="absolute w-2 h-3.5 rounded-sm animate-confetti-twirl opacity-90 shadow-sm"
+              style={{
+                left: `${(i * 100) / 22 + (i % 2) * 1.5}%`,
+                backgroundColor: ['#fbbf24', '#f43f5e', '#38bdf8', '#34d399', '#a855f7', '#f97316', '#ffffff'][i % 7],
+                animationDelay: `${(i * 0.11).toFixed(2)}s`,
+                animationDuration: `${1.9 + (i % 4) * 0.35}s`,
+              }}
+            />
+          ))}
+        </div>
+      )}
+
       <div
-        className={`p-6 rounded-2xl border-2 shadow-2xl max-w-sm w-full transform animate-bounce-once ${
+        className={`relative z-10 p-6 rounded-2xl border-2 shadow-2xl max-w-sm w-full transform animate-bounce-once ${
           gameWon ? 'bg-amber-950/90 border-amber-400 text-amber-200 shadow-[0_0_30px_rgba(245,158,11,0.3)]' : 'bg-rose-950/90 border-rose-500 text-rose-200 shadow-[0_0_30px_rgba(244,63,94,0.3)]'
         }`}
       >
