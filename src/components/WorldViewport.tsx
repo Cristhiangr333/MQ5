@@ -4,7 +4,6 @@ import { IllustratedWorldViewport } from './IllustratedWorldViewport';
 import { DynamicParticleSystem } from './DynamicParticleSystem';
 import { GameMode, MathQuestion, RegionDefinition } from '../types';
 import { REGIONS } from '../data/regionsData';
-import { DynamicParticleSystem } from './DynamicParticleSystem';
 import { Eye, Layers, Compass, ArrowLeft } from 'lucide-react';
 
 interface WorldViewportProps {
@@ -20,8 +19,6 @@ interface WorldViewportProps {
   raceProgress?: number;
   shopCartTotal?: number;
   cluesFound?: number;
-  gameWon?: boolean;
-  gameOver?: boolean;
   combo: number;
   gameWon?: boolean;
   gameOver?: boolean;
@@ -43,8 +40,6 @@ export const WorldViewport: React.FC<WorldViewportProps> = ({
   raceProgress = 0,
   shopCartTotal = 0,
   cluesFound = 0,
-  gameWon = false,
-  gameOver = false,
   combo,
   gameWon = false,
   gameOver = false,
