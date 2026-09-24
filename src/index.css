@@ -556,3 +556,122 @@
 .animate-bounce-once {
   animation: bounceOnce 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
 }
+
+/* =========================================================
+   SISTEMA DE CLIMA ATMOSFÉRICO POR REGIÓN (WeatherOverlay)
+   Portado del export de AI Studio (zip -8). Se omite la lluvia
+   de "río" porque esa región ya no existe en el modelo actual.
+   ========================================================= */
+
+/* Ciudad: destello solar y prismas de feria */
+@keyframes sunGlintPulse {
+  0%, 100% {
+    transform: scale(0.85) rotate(0deg);
+    opacity: 0.25;
+  }
+  50% {
+    transform: scale(1.25) rotate(90deg);
+    opacity: 0.75;
+  }
+}
+
+@keyframes sunFlareHalo {
+  0%, 100% {
+    transform: scale(1) translate3d(0, 0, 0);
+    opacity: 0.35;
+  }
+  50% {
+    transform: scale(1.12) translate3d(4px, 4px, 0);
+    opacity: 0.55;
+  }
+}
+
+/* Bosque: rayos crepusculares de sol (Komorebi / God Rays) */
+@keyframes godRayShift {
+  0%, 100% {
+    opacity: 0.18;
+    transform: skewX(-14deg) translateY(0);
+  }
+  50% {
+    opacity: 0.38;
+    transform: skewX(-18deg) translateY(-8px);
+  }
+}
+
+/* Montaña: ondulación de calima térmica y ascuas */
+@keyframes heatShimmerWave {
+  0%, 100% {
+    transform: scaleY(1) translateY(0);
+    opacity: 0.2;
+  }
+  50% {
+    transform: scaleY(1.05) translateY(-6px);
+    opacity: 0.35;
+  }
+}
+
+@keyframes ashAscend {
+  0% {
+    transform: translate3d(0, 40px, 0) scale(0.6);
+    opacity: 0;
+  }
+  20% {
+    opacity: 0.6;
+  }
+  80% {
+    opacity: 0.4;
+  }
+  100% {
+    transform: translate3d(18px, -120px, 0) scale(0.9);
+    opacity: 0;
+  }
+}
+
+/* Castillo: aurora boreal ondulante y ráfagas celestes */
+@keyframes auroraDrift {
+  0% {
+    transform: translateX(-15%) skewY(-2deg) scaleY(0.9);
+    opacity: 0.25;
+  }
+  50% {
+    transform: translateX(10%) skewY(3deg) scaleY(1.15);
+    opacity: 0.5;
+  }
+  100% {
+    transform: translateX(25%) skewY(-1deg) scaleY(0.95);
+    opacity: 0.3;
+  }
+}
+
+@keyframes mysticStarTwinkle {
+  0%, 100% {
+    opacity: 0.2;
+    transform: scale(0.7);
+  }
+  50% {
+    opacity: 0.85;
+    transform: scale(1.2);
+  }
+}
+
+.animate-sun-glint {
+  animation: sunGlintPulse 3s ease-in-out infinite;
+}
+.animate-sun-halo {
+  animation: sunFlareHalo 6s ease-in-out infinite;
+}
+.animate-god-rays {
+  animation: godRayShift 8s ease-in-out infinite;
+}
+.animate-heat-shimmer {
+  animation: heatShimmerWave 5s ease-in-out infinite;
+}
+.animate-ash-rise {
+  animation: ashAscend 5.5s ease-out infinite;
+}
+.animate-aurora-drift {
+  animation: auroraDrift 14s ease-in-out infinite alternate;
+}
+.animate-star-twinkle {
+  animation: mysticStarTwinkle 4s ease-in-out infinite;
+}

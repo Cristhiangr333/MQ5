@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { ThreeWorldCanvas } from './ThreeWorldCanvas';
 import { IllustratedWorldViewport } from './IllustratedWorldViewport';
 import { DynamicParticleSystem } from './DynamicParticleSystem';
+import { WeatherOverlay, getWeatherInfo, WeatherIntensity } from './WeatherOverlay';
 import { GameMode, MathQuestion, RegionDefinition } from '../types';
 import { REGIONS } from '../data/regionsData';
 import { Eye, Layers, Compass, ArrowLeft } from 'lucide-react';
@@ -50,9 +51,21 @@ export const WorldViewport: React.FC<WorldViewportProps> = ({
   // Engine: 'three' (WebGL 3D) or 'illustrated' (Crisp SVG/Isometric from user files)
   const [engine, setEngine] = useState<'three' | 'illustrated'>('illustrated');
   const [webGLError, setWebGLError] = useState(false);
+  // Sistema de clima atmosférico: 'normal' | 'soft' (tenue) | 'off' (apagado)
+  const [weatherIntensity, setWeatherIntensity] = useState<WeatherIntensity>('normal');
 
   const currentRegion: RegionDefinition =
     REGIONS.find((w) => w.id === currentRegionId) || REGIONS[0];
+
+  const weatherInfo = getWeatherInfo(currentRegionId, viewMode);
+
+  const handleCycleWeather = () => {
+    setWeatherIntensity((prev) => {
+      if (prev === 'normal') return 'soft';
+      if (prev === 'soft') return 'off';
+      return 'normal';
+    });
+  };
 
   const handleToggleEngine = () => {
     if (engine === 'three') {
@@ -86,8 +99,38 @@ export const WorldViewport: React.FC<WorldViewportProps> = ({
           )}
         </div>
 
-        {/* Right: Engine Switcher & Map Toggle */}
+        {/* Right: Weather Badge, Engine Switcher & Map Toggle */}
         <div className="flex items-center gap-2">
+          {/* Weather Status & Intensity Control */}
+          <button
+            onClick={handleCycleWeather}
+            className={`hidden sm:flex items-center gap-1.5 bg-slate-900/90 hover:bg-slate-800 border px-3 py-1.5 rounded-full text-xs font-bold transition-all shadow-lg active:scale-95 cursor-pointer backdrop-blur-md ${
+              weatherIntensity === 'off'
+                ? 'border-slate-700 text-slate-400 opacity-70'
+                : 'border-slate-700/80 hover:border-sky-400/60 text-slate-200'
+            }`}
+            title={`Clima: ${weatherInfo.condition} (${
+              weatherIntensity === 'normal'
+                ? 'Intensidad Normal'
+                : weatherIntensity === 'soft'
+                ? 'Intensidad Tenue'
+                : 'Desactivado'
+            }). Haz clic para alternar.`}
+          >
+            <span>{weatherInfo.icon}</span>
+            <span
+              className={`text-[10px] px-1.5 py-0.5 rounded font-mono font-bold ${
+                weatherIntensity === 'normal'
+                  ? 'bg-sky-500/20 text-sky-300 border border-sky-500/30'
+                  : weatherIntensity === 'soft'
+                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                  : 'bg-slate-800 text-slate-500'
+              }`}
+            >
+              {weatherIntensity === 'normal' ? 'Normal' : weatherIntensity === 'soft' ? 'Tenue' : 'Off'}
+            </span>
+          </button>
+
           {/* Dual-Engine Toggle Button */}
           <button
             id="engine-toggle-btn"
@@ -175,6 +218,13 @@ export const WorldViewport: React.FC<WorldViewportProps> = ({
           onSelectRegion={onSelectRegion}
         />
       )}
+
+      {/* Capa de clima atmosférico (sol/niebla/calima/aurora según la región) */}
+      <WeatherOverlay
+        worldId={currentRegionId}
+        viewMode={viewMode}
+        intensity={weatherIntensity}
+      />
 
       {/* Capa de partículas (reacciona a aciertos, combos, victoria/derrota) */}
       <DynamicParticleSystem

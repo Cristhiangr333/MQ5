@@ -201,16 +201,19 @@ export const DynamicParticleSystem: React.FC<DynamicParticleSystemProps> = ({
     });
   };
 
-  // 4. VICTORY EXPLOSION (Fireworks, confetti bursts, stars)
+  // 4. VICTORY EXPLOSION (Multi-stage fireworks, confetti bursts, side cannons, falling star rain)
   const spawnVictoryExplosion = (w: number, h: number) => {
     const burstCenters = [
-      { x: w * 0.3, y: h * 0.4 },
-      { x: w * 0.7, y: h * 0.4 },
-      { x: w * 0.5, y: h * 0.3 },
+      { x: w * 0.28, y: h * 0.38 },
+      { x: w * 0.72, y: h * 0.38 },
+      { x: w * 0.5, y: h * 0.28 },
+      { x: w * 0.38, y: h * 0.5 },
+      { x: w * 0.62, y: h * 0.5 },
     ];
 
-    const partyColors = ['#fbbf24', '#38bdf8', '#ec4899', '#22c55e', '#a855f7', '#f97316', '#ffffff'];
+    const partyColors = ['#fbbf24', '#38bdf8', '#ec4899', '#22c55e', '#a855f7', '#f97316', '#ffffff', '#facc15'];
 
+    // Radial explosive firework bursts
     burstCenters.forEach((center, idx) => {
       setTimeout(() => {
         // Shockwave
@@ -219,11 +222,11 @@ export const DynamicParticleSystem: React.FC<DynamicParticleSystemProps> = ({
           y: center.y,
           vx: 0,
           vy: 0,
-          size: 6,
-          maxSize: 180,
+          size: 8,
+          maxSize: 220,
           color: partyColors[idx % partyColors.length],
           alpha: 1.0,
-          decay: 0.025,
+          decay: 0.022,
           life: 1.0,
           maxLife: 1.0,
           rotation: 0,
@@ -231,37 +234,91 @@ export const DynamicParticleSystem: React.FC<DynamicParticleSystemProps> = ({
           type: 'shockwave',
           gravity: 0,
           drag: 1,
-          extra: { radius: 20, maxRadius: 180 },
+          extra: { radius: 25, maxRadius: 220 },
         });
 
-        // 70 radiant sparkles and confetti
-        for (let i = 0; i < 70; i++) {
+        // 80 radiant sparkles, golden stars and confetti
+        for (let i = 0; i < 80; i++) {
           const angle = Math.random() * Math.PI * 2;
-          const speed = 4.0 + Math.random() * 11.0;
+          const speed = 5.0 + Math.random() * 12.0;
           const color = partyColors[Math.floor(Math.random() * partyColors.length)];
 
           addParticle({
             x: center.x,
             y: center.y,
             vx: Math.cos(angle) * speed,
-            vy: Math.sin(angle) * speed - 2.5,
-            size: 4 + Math.random() * 6,
-            maxSize: 10,
+            vy: Math.sin(angle) * speed - 3.2,
+            size: 4 + Math.random() * 7,
+            maxSize: 12,
             color,
             alpha: 1.0,
-            decay: 0.014 + Math.random() * 0.012,
+            decay: 0.012 + Math.random() * 0.01,
             life: 1.0,
             maxLife: 1.0,
             rotation: Math.random() * Math.PI * 2,
-            rotationSpeed: (Math.random() - 0.5) * 0.25,
-            type: Math.random() > 0.45 ? 'confetti' : 'star',
-            gravity: 0.16,
+            rotationSpeed: (Math.random() - 0.5) * 0.3,
+            type: Math.random() > 0.4 ? 'confetti' : 'star',
+            gravity: 0.15,
             drag: 0.97,
-            extra: { aspect: 0.4 + Math.random() * 0.5 },
+            extra: { aspect: 0.35 + Math.random() * 0.65 },
           });
         }
-      }, idx * 180);
+      }, idx * 220);
     });
+
+    // Upward side mortar cannons shooting celebratory flares
+    [0.08, 0.92].forEach((xRatio, cIdx) => {
+      setTimeout(() => {
+        for (let p = 0; p < 45; p++) {
+          const angle = (xRatio < 0.5 ? -Math.PI * 0.32 : -Math.PI * 0.68) + (Math.random() - 0.5) * 0.45;
+          const speed = 8.0 + Math.random() * 9.0;
+          addParticle({
+            x: w * xRatio,
+            y: h * 0.92,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
+            size: 4 + Math.random() * 5,
+            maxSize: 10,
+            color: partyColors[Math.floor(Math.random() * partyColors.length)],
+            alpha: 1.0,
+            decay: 0.015,
+            life: 1.0,
+            maxLife: 1.0,
+            rotation: Math.random() * Math.PI * 2,
+            rotationSpeed: (Math.random() - 0.5) * 0.2,
+            type: 'confetti',
+            gravity: 0.18,
+            drag: 0.98,
+            extra: { aspect: 0.4 },
+          });
+        }
+      }, cIdx * 150 + 100);
+    });
+
+    // Cascading confetti rain from top of screen across full width
+    for (let r = 0; r < 55; r++) {
+      setTimeout(() => {
+        addParticle({
+          x: Math.random() * w,
+          y: -10,
+          vx: (Math.random() - 0.5) * 2.5,
+          vy: 2.2 + Math.random() * 3.5,
+          size: 5 + Math.random() * 6,
+          maxSize: 12,
+          color: partyColors[Math.floor(Math.random() * partyColors.length)],
+          alpha: 1.0,
+          decay: 0.008,
+          life: 1.0,
+          maxLife: 1.0,
+          rotation: Math.random() * Math.PI * 2,
+          rotationSpeed: (Math.random() - 0.5) * 0.25,
+          type: Math.random() > 0.3 ? 'confetti' : 'star',
+          gravity: 0.08,
+          drag: 0.985,
+          extra: { aspect: 0.35 + Math.random() * 0.6 },
+        });
+      }, r * 35);
+    }
   };
 
   // React to Game Events
