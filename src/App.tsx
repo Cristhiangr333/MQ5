@@ -8,6 +8,7 @@ import { GameHUD } from './components/GameHUD';
 import { QuestionPanel } from './components/QuestionPanel';
 import { RegionLevelStrip } from './components/RegionLevelStrip';
 import { GameOverModal } from './components/GameOverModal';
+import { GameModeTutorial } from './components/GameModeTutorial';
 import { Play, Compass, LogOut, Loader2, AlertTriangle } from 'lucide-react';
 
 const MAX_LIVES = 3;
@@ -15,6 +16,30 @@ const TIME_PER_QUESTION_MS = 12000;
 // Respuesta imposible: marca la pregunta como respondida (mal) cuando se agota el
 // tiempo, para que la ronda cuente como "completa" ante submit_round (ver ADR-007).
 const TIMEOUT_SENTINEL_ANSWER = -1;
+// Un tutorial de "así se juega" por tipo de juego, solo la primera vez que un
+// estudiante entra a cada uno (persiste en este navegador/dispositivo).
+const TUTORIAL_SEEN_KEY = 'mq5_tutorial_seen_v1';
+
+function loadSeenTutorials(): Set<GameMode> {
+  try {
+    const raw = window.localStorage.getItem(TUTORIAL_SEEN_KEY);
+    if (!raw) return new Set();
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? new Set(arr) : new Set();
+  } catch {
+    return new Set(); // localStorage no disponible (privado/incógnito): no bloquea el juego
+  }
+}
+
+function markTutorialSeen(gameModeId: GameMode) {
+  try {
+    const seen = loadSeenTutorials();
+    seen.add(gameModeId);
+    window.localStorage.setItem(TUTORIAL_SEEN_KEY, JSON.stringify(Array.from(seen)));
+  } catch {
+    // Si no se puede guardar, el tutorial simplemente volverá a aparecer la próxima vez. No es grave.
+  }
+}
 
 function emptySession(regionId: string, gameModeId: GameMode): GameSessionState {
   return {
@@ -84,6 +109,9 @@ export default function App({ playerName, courseName, onExit }: AppProps = {}) {
   const [session, setSession] = useState<GameSessionState>(() => emptySession('bosque', 'race'));
   const [levelLoading, setLevelLoading] = useState(false);
   const [levelError, setLevelError] = useState<string | null>(null);
+  // Si no es null, hay un tutorial de "así se juega" bloqueando la pantalla
+  // (primera vez que este dispositivo entra a este tipo de juego).
+  const [tutorialGameMode, setTutorialGameMode] = useState<GameMode | null>(null);
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const submittedRef = useRef(false);
@@ -126,14 +154,16 @@ export default function App({ playerName, courseName, onExit }: AppProps = {}) {
         return;
       }
       const maxTime = config.secondsPerQuestion * 1000;
+      const isFirstTimeForThisMode = !loadSeenTutorials().has(gameModeId);
       setSession({
         ...emptySession(regionId, gameModeId),
         totalQuestions: questions.length,
         questions,
         timeLeft: maxTime,
         maxTime,
-        isTimerActive: true,
+        isTimerActive: !isFirstTimeForThisMode,
       });
+      setTutorialGameMode(isFirstTimeForThisMode ? gameModeId : null);
       setStats((prev) => ({ ...prev, lives: config.lives, maxLives: config.lives, combo: 0, score: 0 }));
     } catch (err) {
       setLevelError(err instanceof Error ? err.message : 'No pudimos cargar las preguntas de este nivel.');
@@ -329,7 +359,7 @@ export default function App({ playerName, courseName, onExit }: AppProps = {}) {
       } else if (e.key === 'v' || e.key === 'V') {
         const btn = document.getElementById('engine-toggle-btn');
         if (btn) btn.click();
-      } else if (['1', '2', '3'].includes(e.key) && viewMode === 'game' && !session.isAnswered) {
+      } else if (['1', '2', '3'].includes(e.key) && viewMode === 'game' && !session.isAnswered && !tutorialGameMode) {
         const idx = parseInt(e.key) - 1;
         const q = session.questions[session.activeQuestionIndex];
         if (q && q.options[idx] !== undefined) {
@@ -339,7 +369,7 @@ export default function App({ playerName, courseName, onExit }: AppProps = {}) {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [viewMode, session, handleSelectOption]);
+  }, [viewMode, session, handleSelectOption, tutorialGameMode]);
 
   const activeQuestion = session.questions[session.activeQuestionIndex] || null;
 
@@ -361,6 +391,13 @@ export default function App({ playerName, courseName, onExit }: AppProps = {}) {
       setSession((s) => ({ ...s, gameOver: false, gameWon: false }));
     }
   };
+
+  const handleDismissTutorial = useCallback(() => {
+    if (!tutorialGameMode) return;
+    markTutorialSeen(tutorialGameMode);
+    setTutorialGameMode(null);
+    setSession((prev) => ({ ...prev, isTimerActive: true }));
+  }, [tutorialGameMode]);
 
   if (progressLoading) {
     return (
@@ -531,6 +568,8 @@ export default function App({ playerName, courseName, onExit }: AppProps = {}) {
         }}
         onNextLevel={session.gameWon ? handleNextLevel : undefined}
       />
+
+      <GameModeTutorial gameMode={tutorialGameMode} onDismiss={handleDismissTutorial} />
     </div>
   );
 }
