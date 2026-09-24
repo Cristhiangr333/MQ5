@@ -754,6 +754,13 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
     const width = container.clientWidth || 800;
     const height = container.clientHeight || 450;
 
+    // Detección simple de móvil/gama baja: pantallas angostas o sin mouse
+    // fino (touch). En esos casos bajamos un poco la calidad del renderer
+    // para mantener buenos FPS, sin cambiar nada del diseño ni la cámara.
+    const isMobileOrLowEnd =
+      typeof window !== 'undefined' &&
+      (window.matchMedia?.('(pointer: coarse)').matches || window.innerWidth < 768);
+
     // 1. Scene
     const scene = new THREE.Scene();
     scene.background = new THREE.Color('#7dd3fc');
@@ -769,7 +776,7 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
     let renderer: THREE.WebGLRenderer;
     try {
       renderer = new THREE.WebGLRenderer({
-        antialias: true,
+        antialias: !isMobileOrLowEnd,
         alpha: false,
         powerPreference: 'high-performance',
       });
@@ -780,8 +787,8 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
     }
 
     renderer.setSize(width, height);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.shadowMap.enabled = true;
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, isMobileOrLowEnd ? 1.5 : 2));
+    renderer.shadowMap.enabled = !isMobileOrLowEnd;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.domElement.style.width = '100%';
     renderer.domElement.style.height = '100%';
@@ -917,24 +924,36 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
     const raycaster = new THREE.Raycaster();
     const mouse = new THREE.Vector2();
 
-    const handlePointerDown = (e: MouseEvent) => {
+    // Punto de contacto, ya sea de mouse o del primer dedo (touch), para que
+    // arrastrar y tocar islas funcione igual en celular/tablet que en desktop.
+    const pointFromEvent = (e: MouseEvent | TouchEvent): { x: number; y: number } => {
+      if ('touches' in e) {
+        const t = e.touches[0] ?? e.changedTouches[0];
+        return { x: t.clientX, y: t.clientY };
+      }
+      return { x: e.clientX, y: e.clientY };
+    };
+
+    const handlePointerDown = (e: MouseEvent | TouchEvent) => {
       isDragging.current = true;
-      prevMousePos.current = { x: e.clientX, y: e.clientY };
+      prevMousePos.current = pointFromEvent(e);
     };
 
-    const handlePointerMove = (e: MouseEvent) => {
+    const handlePointerMove = (e: MouseEvent | TouchEvent) => {
       if (!isDragging.current) return;
-      const deltaX = e.clientX - prevMousePos.current.x;
+      const { x, y } = pointFromEvent(e);
+      const deltaX = x - prevMousePos.current.x;
       mapRotationAngle.current += deltaX * 0.005;
-      prevMousePos.current = { x: e.clientX, y: e.clientY };
+      prevMousePos.current = { x, y };
     };
 
-    const handlePointerUp = (e: MouseEvent) => {
+    const handlePointerUp = (e: MouseEvent | TouchEvent) => {
       isDragging.current = false;
-      // If click was stationary, detect island click
+      // If tap/click was stationary, detect island click
+      const { x, y } = pointFromEvent(e);
       const rect = renderer.domElement.getBoundingClientRect();
-      mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-      mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+      mouse.x = ((x - rect.left) / rect.width) * 2 - 1;
+      mouse.y = -((y - rect.top) / rect.height) * 2 + 1;
 
       raycaster.setFromCamera(mouse, camera);
       const interactableMeshes = mapIslandsRef.current.map((item) => item.mesh);
@@ -950,9 +969,13 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
     };
 
     const domEl = renderer.domElement;
+    domEl.style.touchAction = 'none'; // evita que el navegador haga scroll/zoom al arrastrar
     domEl.addEventListener('mousedown', handlePointerDown);
     window.addEventListener('mousemove', handlePointerMove);
     window.addEventListener('mouseup', handlePointerUp);
+    domEl.addEventListener('touchstart', handlePointerDown, { passive: true });
+    window.addEventListener('touchmove', handlePointerMove, { passive: true });
+    window.addEventListener('touchend', handlePointerUp);
 
     return () => {
       resizeObserver.disconnect();
@@ -960,6 +983,9 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
       domEl.removeEventListener('mousedown', handlePointerDown);
       window.removeEventListener('mousemove', handlePointerMove);
       window.removeEventListener('mouseup', handlePointerUp);
+      domEl.removeEventListener('touchstart', handlePointerDown);
+      window.removeEventListener('touchmove', handlePointerMove);
+      window.removeEventListener('touchend', handlePointerUp);
 
       if (animFrameIdRef.current) cancelAnimationFrame(animFrameIdRef.current);
       if (rendererRef.current && rendererRef.current.domElement) {

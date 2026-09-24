@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ThreeWorldCanvas } from './ThreeWorldCanvas';
 import { IllustratedWorldViewport } from './IllustratedWorldViewport';
 import { DynamicParticleSystem } from './DynamicParticleSystem';
@@ -48,8 +48,9 @@ export const WorldViewport: React.FC<WorldViewportProps> = ({
   onSelectRegion,
   onToggleViewMode,
 }) => {
-  // Engine: 'three' (WebGL 3D) or 'illustrated' (Crisp SVG/Isometric from user files)
-  const [engine, setEngine] = useState<'three' | 'illustrated'>('illustrated');
+  // Engine: 'three' (WebGL 3D) es el modo PRINCIPAL. 'illustrated' es el
+  // respaldo si el navegador no soporta WebGL o el docente lo prefiere.
+  const [engine, setEngine] = useState<'three' | 'illustrated'>('three');
   const [webGLError, setWebGLError] = useState(false);
   // Sistema de clima atmosférico: 'normal' | 'soft' (tenue) | 'off' (apagado)
   const [weatherIntensity, setWeatherIntensity] = useState<WeatherIntensity>('normal');
@@ -58,6 +59,13 @@ export const WorldViewport: React.FC<WorldViewportProps> = ({
     REGIONS.find((w) => w.id === currentRegionId) || REGIONS[0];
 
   const weatherInfo = getWeatherInfo(currentRegionId, viewMode);
+
+  // Cada vez que se entra a un nivel o se cambia de región/juego, vuelve al 3D
+  // (el modo principal), salvo que el WebGL ya haya fallado en este navegador.
+  useEffect(() => {
+    if (!webGLError) setEngine('three');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentRegionId, gameMode]);
 
   const handleCycleWeather = () => {
     setWeatherIntensity((prev) => {
@@ -82,7 +90,10 @@ export const WorldViewport: React.FC<WorldViewportProps> = ({
   return (
     <div className="relative w-full">
       {/* Top Floating Controls Bar */}
-      <div className="absolute top-3 left-3 right-3 z-30 flex items-center justify-between pointer-events-auto">
+      <div
+        className="absolute left-3 right-3 z-30 flex items-center justify-between pointer-events-auto"
+        style={{ top: 'calc(0.75rem + env(safe-area-inset-top, 0px))' }}
+      >
         {/* Left: Current World or Map Badge */}
         <div className="flex items-center gap-2 bg-slate-900/85 backdrop-blur-md border border-slate-700/80 px-3 py-1.5 rounded-full text-xs font-bold text-slate-200 shadow-lg">
           {viewMode === 'map' ? (
