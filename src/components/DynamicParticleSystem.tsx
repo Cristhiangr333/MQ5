@@ -438,26 +438,39 @@ export const DynamicParticleSystem: React.FC<DynamicParticleSystemProps> = ({
 
     let running = true;
     let stepTimer = 0;
+    let cssWidth = 800;
+    let cssHeight = 450;
+    let currentDpr = 1;
 
     const resize = () => {
       if (!canvas.parentElement) return;
       const rect = canvas.parentElement.getBoundingClientRect();
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
-      canvas.width = rect.width * dpr;
-      canvas.height = rect.height * dpr;
-      ctx.scale(dpr, dpr);
+      if (rect.width <= 0 || rect.height <= 0) return;
+      currentDpr = Math.min(window.devicePixelRatio || 1, 2);
+      cssWidth = rect.width;
+      cssHeight = rect.height;
+      canvas.width = Math.round(rect.width * currentDpr);
+      canvas.height = Math.round(rect.height * currentDpr);
+      // setTransform en vez de scale(): scale() se multiplica cada vez que se
+      // llama, así que dos resizes seguidos (p. ej. al rotar el celular)
+      // dejaban el dibujo mal escalado. setTransform fija la escala absoluta.
+      ctx.setTransform(currentDpr, 0, 0, currentDpr, 0, 0);
     };
 
     resize();
     window.addEventListener('resize', resize);
+    const resizeObserver = new ResizeObserver(() => resize());
+    if (canvas.parentElement) {
+      resizeObserver.observe(canvas.parentElement);
+    }
 
     const renderLoop = (now: number) => {
       if (!running) return;
       const dt = Math.min(0.05, (now - lastTimeRef.current) / 1000);
       lastTimeRef.current = now;
 
-      const w = canvas.width / (window.devicePixelRatio || 1);
-      const h = canvas.height / (window.devicePixelRatio || 1);
+      const w = cssWidth;
+      const h = cssHeight;
 
       ctx.clearRect(0, 0, w, h);
 
@@ -609,6 +622,7 @@ export const DynamicParticleSystem: React.FC<DynamicParticleSystemProps> = ({
     return () => {
       running = false;
       window.removeEventListener('resize', resize);
+      resizeObserver.disconnect();
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
     };
   }, [gameMode, gameOver, gameWon, combo]);

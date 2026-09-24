@@ -594,6 +594,36 @@ function renderBridgeSegments(
   }
 }
 
+// Cañón de confeti 3D reutilizable para la celebración de victoria de un juego.
+// Nota: Carrera ya tiene su propio confeti (más simple, hecho por otra sesión) y
+// no se toca aquí para no arriesgar algo que ya funciona; esta función se usa
+// solo para agregar el efecto a Batalla, Tienda, Puente y Detective, que no lo
+// tenían.
+function create3DConfettiGroup(centerPos: THREE.Vector3, count: number = 95): THREE.Group {
+  const group = new THREE.Group();
+  group.position.copy(centerPos);
+  const colors = [0xf59e0b, 0xef4444, 0x3b82f6, 0x10b981, 0xa855f7, 0xf43f5e, 0xfacc15, 0x38bdf8, 0xffffff];
+  for (let c = 0; c < count; c++) {
+    const isRibbon = c % 3 === 0;
+    const geo = isRibbon
+      ? new THREE.BoxGeometry(0.045, 0.22, 0.01)
+      : new THREE.BoxGeometry(0.09, 0.09, 0.01);
+    const piece = new THREE.Mesh(
+      geo,
+      new THREE.MeshBasicMaterial({ color: colors[c % colors.length], side: THREE.DoubleSide })
+    );
+    piece.position.set(
+      (Math.random() - 0.5) * 5.2,
+      Math.random() * 3.6,
+      (Math.random() - 0.5) * 4.2
+    );
+    piece.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
+    group.add(piece);
+  }
+  group.visible = false;
+  return group;
+}
+
 export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
   viewMode,
   currentRegionId,
@@ -1723,6 +1753,11 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
         rootGroup.add(crumbleGroup);
         golemCrumbleGroupRef.current = crumbleGroup;
 
+        // Cañón de confeti 3D de victoria (Batalla)
+        const battleConfetti = create3DConfettiGroup(new THREE.Vector3(-0.6, 2.8, 0), 100);
+        rootGroup.add(battleConfetti);
+        finishConfettiGroupRef.current = battleConfetti;
+
         // In-Scene 3D Battle Clash Sparks Particle System
         const bSparksGroup = new THREE.Group();
         const bSparksData: { mesh: THREE.Mesh; vx: number; vy: number; vz: number; life: number }[] = [];
@@ -2331,6 +2366,11 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
         rootGroup.add(shopSparksGroup);
         shopSparksGroupRef.current = shopSparksGroup;
         shopSparksDataRef.current = shopSparksData;
+
+        // Cañón de confeti 3D de victoria (Tienda)
+        const shopConfetti = create3DConfettiGroup(new THREE.Vector3(0, 2.8, 0), 100);
+        rootGroup.add(shopConfetti);
+        finishConfettiGroupRef.current = shopConfetti;
       } else if (gameMode === 'bridge') {
         // WORLD 4: RÍO — Puente Colgante en Cañón 3D & Relieves Rocosos
         targetCamPos.current.set(0, 5, 8.5);
@@ -2490,6 +2530,11 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
         rootGroup.add(walkerObj.group);
         bridgeWalkerRef.current = walkerObj.group;
         walkerCharRef.current = walkerObj;
+
+        // Cañón de confeti 3D de victoria (Puente)
+        const bridgeConfetti = create3DConfettiGroup(new THREE.Vector3(3.8, 2.8, 0), 100);
+        rootGroup.add(bridgeConfetti);
+        finishConfettiGroupRef.current = bridgeConfetti;
       } else if (gameMode === 'detective') {
         // WORLD 5: CASTILLO — Gran Fortaleza Real, Torres Almenadas y Gran Portón Acorazado 3D
         targetCamPos.current.set(0, 4.6, 8.4);
@@ -2934,6 +2979,11 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
         rootGroup.add(detObj.group);
         castleDetectiveRef.current = detObj.group;
         detectiveCharRef.current = detObj;
+
+        // Cañón de confeti 3D de victoria (Detective)
+        const castleConfetti = create3DConfettiGroup(new THREE.Vector3(0, 3.0, 0.2), 110);
+        rootGroup.add(castleConfetti);
+        finishConfettiGroupRef.current = castleConfetti;
 
         // Detective Defeat Question Marks (3 question marks rotating on defeat)
         const qmGroup = new THREE.Group();
@@ -3642,6 +3692,7 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
         const enemy = enemyFighterRef.current;
         if (enemy) enemy.visible = false;
         if (golemCrumbleGroupRef.current) golemCrumbleGroupRef.current.visible = true;
+        if (finishConfettiGroupRef.current) finishConfettiGroupRef.current.visible = true;
         if (heroVictoryAuraRef.current) {
           (heroVictoryAuraRef.current.material as THREE.MeshBasicMaterial).opacity = 0.45;
         }
@@ -3667,6 +3718,7 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
         // Don Mateo cheers / coins dance in fountain, customer holds celebration bag
         if (shopCheerCoinsRef.current) shopCheerCoinsRef.current.visible = true;
         if (shopCelebrationBagRef.current) shopCelebrationBagRef.current.visible = true;
+        if (finishConfettiGroupRef.current) finishConfettiGroupRef.current.visible = true;
         targetCamPos.current.set(0, 3.8, 5.8);
         targetCamLookAt.current.set(0, 1.5, 0);
 
@@ -3685,6 +3737,7 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
         // Explorer reaches destination cliff (x = 3.8), plants red victory flag
         const walker = bridgeWalkerRef.current;
         if (bridgeVictoryFlagRef.current) bridgeVictoryFlagRef.current.visible = true;
+        if (finishConfettiGroupRef.current) finishConfettiGroupRef.current.visible = true;
         targetCamPos.current.set(3.0, 4.5, 6.0);
         targetCamLookAt.current.set(3.8, 1.8, 0);
 
@@ -3710,6 +3763,7 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
         const doorRight = castleDoorRightRef.current;
         const det = castleDetectiveRef.current;
         if (castleSparklesRef.current) castleSparklesRef.current.visible = true;
+        if (finishConfettiGroupRef.current) finishConfettiGroupRef.current.visible = true;
         targetCamPos.current.set(0, 3.4, 4.5);
         targetCamLookAt.current.set(0, 1.5, -1.8);
 
