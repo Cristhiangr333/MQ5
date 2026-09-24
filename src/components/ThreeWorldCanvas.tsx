@@ -4268,42 +4268,28 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
       )}
 
       {/* ========================================================= */}
-      {/* SUBTLE AMBIENT BACKGROUND PARTICLES (CSS BASED, LOW NOISE) */}
+      {/* PARTÍCULAS AMBIENTALES DE FONDO (CSS, SUTILES, POR REGIÓN) */}
       {/* ========================================================= */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
-        {/* World 1: Bosque (Hojas flotando sutilmente en el fondo) */}
+        {/* Bosque de la Suma: hojas flotando en el fondo */}
         {viewMode === 'game' && currentRegionId === 'bosque' && (
           <div className="absolute inset-0">
-            <span
-              className="absolute left-[8%] -top-4 w-3.5 h-2 rounded-full bg-emerald-400/40 animate-leaf-1 blur-[0.3px]"
-              style={{ transformOrigin: 'center' }}
-            />
-            <span
-              className="absolute left-[32%] -top-4 w-4 h-2.5 rounded-full bg-green-500/35 animate-leaf-2 blur-[0.4px]"
-              style={{ transformOrigin: 'center' }}
-            />
-            <span
-              className="absolute right-[22%] -top-4 w-3 h-2 rounded-full bg-lime-400/35 animate-leaf-3 blur-[0.3px]"
-              style={{ transformOrigin: 'center' }}
-            />
-            <span
-              className="absolute right-[8%] -top-4 w-4 h-2.5 rounded-full bg-emerald-600/30 animate-leaf-4 blur-[0.4px]"
-              style={{ transformOrigin: 'center' }}
-            />
+            <span className="absolute left-[8%] -top-4 w-3.5 h-2 rounded-full bg-emerald-400/40 animate-leaf-1 blur-[0.3px]" />
+            <span className="absolute left-[32%] -top-4 w-4 h-2.5 rounded-full bg-green-500/35 animate-leaf-2 blur-[0.4px]" />
+            <span className="absolute right-[22%] -top-4 w-3 h-2 rounded-full bg-lime-400/35 animate-leaf-3 blur-[0.3px]" />
+            <span className="absolute right-[8%] -top-4 w-4 h-2.5 rounded-full bg-emerald-600/30 animate-leaf-4 blur-[0.4px]" />
           </div>
         )}
 
-        {/* World 2: Montaña (Neblina y bruma volcánica baja y suave) */}
+        {/* Montaña de la Resta: neblina baja y suave */}
         {viewMode === 'game' && currentRegionId === 'montana' && (
           <div className="absolute inset-0">
-            {/* Capa de bruma lejana */}
             <div className="absolute -left-[30%] top-1/4 w-[160%] h-24 bg-gradient-to-r from-transparent via-orange-500/10 to-transparent blur-2xl animate-mist-slow" />
-            {/* Capa de neblina de fondo baja */}
             <div className="absolute -left-[20%] top-1/2 w-[150%] h-28 bg-gradient-to-r from-transparent via-slate-400/10 to-transparent blur-3xl animate-mist-reverse" />
           </div>
         )}
 
-        {/* World 3: Ciudad / Tienda (Chispas tenues y motas de polvo cálido en el fondo) */}
+        {/* Ciudad de la Multiplicación: chispas tenues de mercado */}
         {viewMode === 'game' && currentRegionId === 'ciudad' && (
           <div className="absolute inset-0">
             <span className="absolute left-[18%] bottom-14 w-2 h-2 rounded-full bg-amber-400/40 blur-[0.6px] animate-spark-1" />
@@ -4313,7 +4299,7 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
           </div>
         )}
 
-        {/* World 5: Castillo (Polvillo místico flotante y motas de maná sutiles) */}
+        {/* Castillo de la División: polvillo místico flotante */}
         {viewMode === 'game' && currentRegionId === 'castillo' && (
           <div className="absolute inset-0">
             <span className="absolute left-[12%] top-24 w-2.5 h-2.5 rounded-full bg-purple-400/30 blur-[0.8px] animate-mystic-1" />

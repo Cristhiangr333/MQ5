@@ -416,13 +416,14 @@
   animation: basketDrop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
 }
 
-/* ===================================================================
-   Ambiente de fondo por región (mapa 3D del archipiélago, ThreeWorldCanvas)
-   Una animación sutil por región: hojas en el Bosque, neblina en la
-   Montaña, chispas en la Ciudad, motas místicas en el Castillo.
-   =================================================================== */
+/* =========================================================
+   PARTÍCULAS AMBIENTALES DE FONDO POR REGIÓN (CSS, SUTIL)
+   Portadas desde el export de AI Studio (zip -7). Se omite la
+   animación de "río" porque ese mundo ya no existe en el modelo
+   actual de 4 regiones (ADR-003).
+   ========================================================= */
 
-/* Bosque: hojas cayendo lentamente */
+/* Bosque de la Suma: hojas cayendo suavemente */
 @keyframes forestLeafDrift {
   0% {
     transform: translate3d(0, -20px, 0) rotate(0deg) scale(0.85);
@@ -444,7 +445,7 @@
   }
 }
 
-/* Montaña: neblina y fumarolas lentas */
+/* Montaña de la Resta: neblina lenta */
 @keyframes mountainMistFlow {
   0% {
     transform: translateX(-30%) translateY(0) scaleY(1);
@@ -460,7 +461,7 @@
   }
 }
 
-/* Ciudad: chispas tenues de fragua y mercado */
+/* Ciudad de la Multiplicación: chispas tenues de mercado */
 @keyframes shopSparkFloat {
   0% {
     transform: translateY(20px) translateX(0) scale(0.5);
@@ -480,7 +481,7 @@
   }
 }
 
-/* Castillo: polvillo místico flotante */
+/* Castillo de la División: polvillo místico flotante */
 @keyframes castleMysticMote {
   0% {
     transform: translate3d(0, 0, 0) scale(0.8);
