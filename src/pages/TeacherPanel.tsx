@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
-import { Check, Copy, Flame, LogOut, Plus, Star, Users } from 'lucide-react';
+import { Archive, ArchiveRestore, Check, Copy, Flame, LogOut, Pencil, Plus, Star, Trash2, Users, X } from 'lucide-react';
 import { useAuth } from '../auth/AuthProvider';
 import { supabase } from '../lib/supabase';
 import { friendlyError } from '../lib/errors';
@@ -42,6 +42,20 @@ export default function TeacherPanel() {
     Record<string, { status: 'loading' | 'ready' | 'error'; rows: StudentProgressSummary[]; message?: string }>
   >({});
   const [openStudent, setOpenStudent] = useState<{ id: string; name: string } | null>(null);
+
+  // Edición en línea de curso (renombrar / archivar) y de estudiante (renombrar / quitar)
+  const [editingCourseId, setEditingCourseId] = useState<string | null>(null);
+  const [editCourseName, setEditCourseName] = useState('');
+  const [courseRowBusy, setCourseRowBusy] = useState<string | null>(null);
+  const [courseRowError, setCourseRowError] = useState<Record<string, string>>({});
+  const [showArchived, setShowArchived] = useState(false);
+
+  const [editingStudentId, setEditingStudentId] = useState<string | null>(null);
+  const [editFirstName, setEditFirstName] = useState('');
+  const [editLastName, setEditLastName] = useState('');
+  const [confirmDeleteStudentId, setConfirmDeleteStudentId] = useState<string | null>(null);
+  const [studentRowBusy, setStudentRowBusy] = useState<string | null>(null);
+  const [studentRowError, setStudentRowError] = useState<Record<string, string>>({});
 
   const loadCourseProgress = useCallback(async (courseId: string) => {
     setProgressByCourse((prev) => {
@@ -112,8 +126,71 @@ export default function TeacherPanel() {
     }
   }
 
+  function startEditCourse(course: CourseRow) {
+    setEditingCourseId(course.id);
+    setEditCourseName(course.name);
+    setCourseRowError((prev) => ({ ...prev, [course.id]: '' }));
+  }
+
+  async function saveCourseName(course: CourseRow) {
+    const name = cleanName(editCourseName);
+    if (name.length === 0) return setCourseRowError((prev) => ({ ...prev, [course.id]: 'Escribe el nombre del curso.' }));
+    if (name.length > 50) return setCourseRowError((prev) => ({ ...prev, [course.id]: 'El nombre es demasiado largo.' }));
+    if (name === course.name) return setEditingCourseId(null);
+
+    setCourseRowBusy(course.id);
+    const { error } = await supabase.from('courses').update({ name }).eq('id', course.id);
+    setCourseRowBusy(null);
+    if (error) return setCourseRowError((prev) => ({ ...prev, [course.id]: friendlyError(error) }));
+    setCourses((prev) => prev.map((c) => (c.id === course.id ? { ...c, name } : c)));
+    setEditingCourseId(null);
+  }
+
+  async function toggleCourseActive(course: CourseRow) {
+    setCourseRowBusy(course.id);
+    const { error } = await supabase.from('courses').update({ is_active: !course.is_active }).eq('id', course.id);
+    setCourseRowBusy(null);
+    if (error) return setCourseRowError((prev) => ({ ...prev, [course.id]: friendlyError(error) }));
+    setCourses((prev) => prev.map((c) => (c.id === course.id ? { ...c, is_active: !c.is_active } : c)));
+  }
+
+  function startEditStudent(s: StudentRow) {
+    setEditingStudentId(s.id);
+    setEditFirstName(s.first_name);
+    setEditLastName(s.last_name);
+    setStudentRowError((prev) => ({ ...prev, [s.id]: '' }));
+  }
+
+  async function saveStudentName(s: StudentRow) {
+    const first = cleanName(editFirstName);
+    const last = cleanName(editLastName);
+    if (first.length === 0 || last.length === 0) {
+      return setStudentRowError((prev) => ({ ...prev, [s.id]: 'Nombre y apellido no pueden quedar vacíos.' }));
+    }
+    if (first === s.first_name && last === s.last_name) return setEditingStudentId(null);
+
+    setStudentRowBusy(s.id);
+    const { error } = await supabase.from('students').update({ first_name: first, last_name: last }).eq('id', s.id);
+    setStudentRowBusy(null);
+    if (error) return setStudentRowError((prev) => ({ ...prev, [s.id]: friendlyError(error) }));
+    setStudents((prev) => prev.map((row) => (row.id === s.id ? { ...row, first_name: first, last_name: last } : row)));
+    setEditingStudentId(null);
+  }
+
+  async function deleteStudent(s: StudentRow) {
+    setStudentRowBusy(s.id);
+    const { error } = await supabase.from('students').delete().eq('id', s.id);
+    setStudentRowBusy(null);
+    if (error) return setStudentRowError((prev) => ({ ...prev, [s.id]: friendlyError(error) }));
+    setStudents((prev) => prev.filter((row) => row.id !== s.id));
+    setConfirmDeleteStudentId(null);
+  }
+
   if (state.status === 'loading') return <FullScreenLoader />;
   if (state.status === 'error') return <FullScreenError message={state.message} onRetry={load} />;
+
+  const activeCourses = courses.filter((c) => c.is_active);
+  const archivedCourses = courses.filter((c) => !c.is_active);
 
   return (
     <Screen wide>
@@ -143,7 +220,7 @@ export default function TeacherPanel() {
         <div className="mt-3"><ErrorBanner message={createError} /></div>
       </Card>
 
-      {courses.length === 0 ? (
+      {activeCourses.length === 0 && archivedCourses.length === 0 ? (
         <Card className="text-center py-10">
           <p className="text-4xl mb-2" aria-hidden="true">🏫</p>
           <p className="font-extrabold">Todavía no tienes cursos.</p>
@@ -155,18 +232,55 @@ export default function TeacherPanel() {
             Tus estudiantes entran en <span className="font-mono text-emerald-300">{window.location.origin}/estudiante</span> y escriben el código de su curso.
           </p>
           <ul className="space-y-4">
-            {courses.map((course) => {
+            {activeCourses.map((course) => {
               const list = students.filter((s) => s.course_id === course.id);
               return (
                 <li key={course.id}>
                   <Card>
                     <div className="flex flex-wrap items-center justify-between gap-4">
-                      <div>
-                        <h3 className="text-xl font-extrabold font-['Baloo_2']">{course.name}</h3>
+                      <div className="min-w-0 flex-1">
+                        {editingCourseId === course.id ? (
+                          <div className="flex items-center gap-2 max-w-xs">
+                            <input
+                              autoFocus
+                              value={editCourseName}
+                              onChange={(e) => setEditCourseName(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') void saveCourseName(course);
+                                if (e.key === 'Escape') setEditingCourseId(null);
+                              }}
+                              maxLength={50}
+                              className="text-xl font-extrabold font-['Baloo_2'] bg-slate-800 border border-slate-600 rounded-lg px-2 py-1 w-full text-white"
+                            />
+                            <button
+                              onClick={() => void saveCourseName(course)}
+                              disabled={courseRowBusy === course.id}
+                              className="p-1.5 text-emerald-300 hover:text-emerald-200 shrink-0"
+                              aria-label="Guardar nombre"
+                            >
+                              {courseRowBusy === course.id ? <Spinner className="w-4 h-4" /> : <Check className="w-4 h-4" />}
+                            </button>
+                            <button onClick={() => setEditingCourseId(null)} className="p-1.5 text-slate-400 hover:text-white shrink-0" aria-label="Cancelar">
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1.5 group/name">
+                            <h3 className="text-xl font-extrabold font-['Baloo_2'] truncate">{course.name}</h3>
+                            <button
+                              onClick={() => startEditCourse(course)}
+                              className="p-1 text-slate-500 hover:text-white opacity-60 group-hover/name:opacity-100 transition-opacity shrink-0"
+                              aria-label={`Renombrar ${course.name}`}
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        )}
                         <p className="text-sm text-slate-300 inline-flex items-center gap-1.5 mt-1">
                           <Users className="w-4 h-4" aria-hidden="true" />
                           {list.length === 1 ? '1 estudiante' : `${list.length} estudiantes`}
                         </p>
+                        {courseRowError[course.id] && <p className="text-xs text-red-400 mt-1">{courseRowError[course.id]}</p>}
                       </div>
                       <div className="flex items-center gap-3">
                         <div className="text-right">
@@ -177,6 +291,15 @@ export default function TeacherPanel() {
                           {copiedId === course.id ? <Check className="w-5 h-5 text-emerald-300" aria-hidden="true" /> : <Copy className="w-5 h-5" aria-hidden="true" />}
                           <span aria-live="polite">{copiedId === course.id ? '¡Copiado!' : 'Copiar'}</span>
                         </Button>
+                        <button
+                          onClick={() => void toggleCourseActive(course)}
+                          disabled={courseRowBusy === course.id}
+                          className="p-2 text-slate-400 hover:text-white bg-slate-800/70 hover:bg-slate-700 rounded-lg transition-colors"
+                          title="Archivar (se puede reactivar después; no borra a nadie)"
+                          aria-label={`Archivar ${course.name}`}
+                        >
+                          <Archive className="w-4 h-4" />
+                        </button>
                       </div>
                     </div>
 
@@ -210,29 +333,107 @@ export default function TeacherPanel() {
                         <ul className="mt-2 divide-y divide-slate-800">
                           {list.map((s) => {
                             const progress = progressByCourse[course.id]?.rows.find((r) => r.student_id === s.id);
+                            const isEditing = editingStudentId === s.id;
+                            const isConfirmingDelete = confirmDeleteStudentId === s.id;
                             return (
-                              <li key={s.id} className="py-2.5 flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5">
-                                <span className="text-sm font-bold text-slate-100">
-                                  {s.first_name} {s.last_name}
-                                </span>
-                                {progress ? (
-                                  <button
-                                    onClick={() => setOpenStudent({ id: s.id, name: `${s.first_name} ${s.last_name}` })}
-                                    className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-300 hover:text-white rounded-lg px-2 py-1 -mx-2 hover:bg-slate-800/70 transition-colors text-left"
-                                  >
-                                    <span className="inline-flex items-center gap-1 font-bold text-amber-300">
-                                      <Flame className="w-3.5 h-3.5" aria-hidden="true" /> {progress.total_xp} XP
-                                    </span>
-                                    <span className="inline-flex items-center gap-1">
-                                      <Star className="w-3.5 h-3.5 text-blue-300" aria-hidden="true" />
-                                      {progress.levels_passed}/20 niveles
-                                    </span>
-                                    <span className="hidden sm:inline text-slate-400">{timeAgo(progress.last_played_at)}</span>
-                                    <span className="text-emerald-300 underline">Ver detalle</span>
-                                  </button>
+                              <li key={s.id} className="py-2.5">
+                                {isConfirmingDelete ? (
+                                  <div className="flex flex-wrap items-center justify-between gap-2 bg-red-950/40 border border-red-800/60 rounded-lg px-3 py-2 -mx-1">
+                                    <p className="text-xs text-red-200">
+                                      ¿Borrar a <strong>{s.first_name} {s.last_name}</strong>? Se pierde para siempre
+                                      {progress ? ` su progreso (${progress.total_xp} XP, ${progress.levels_passed}/20 niveles)` : ' todo su progreso'}.
+                                      No se puede deshacer.
+                                    </p>
+                                    <div className="flex items-center gap-2 shrink-0">
+                                      <button
+                                        onClick={() => void deleteStudent(s)}
+                                        disabled={studentRowBusy === s.id}
+                                        className="text-xs font-bold bg-red-700 hover:bg-red-600 text-white rounded-lg px-3 py-1.5 flex items-center gap-1.5"
+                                      >
+                                        {studentRowBusy === s.id ? <Spinner className="w-3.5 h-3.5" /> : null}
+                                        Sí, borrar
+                                      </button>
+                                      <button
+                                        onClick={() => setConfirmDeleteStudentId(null)}
+                                        className="text-xs font-bold text-slate-300 hover:text-white px-2 py-1.5"
+                                      >
+                                        Cancelar
+                                      </button>
+                                    </div>
+                                  </div>
                                 ) : (
-                                  <span className="text-xs text-slate-500">Sin datos</span>
+                                  <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5">
+                                    {isEditing ? (
+                                      <div className="flex items-center gap-1.5">
+                                        <input
+                                          autoFocus
+                                          value={editFirstName}
+                                          onChange={(e) => setEditFirstName(e.target.value)}
+                                          placeholder="Nombre"
+                                          maxLength={50}
+                                          className="text-sm font-bold bg-slate-800 border border-slate-600 rounded-lg px-2 py-1 w-24 text-white"
+                                        />
+                                        <input
+                                          value={editLastName}
+                                          onChange={(e) => setEditLastName(e.target.value)}
+                                          onKeyDown={(e) => {
+                                            if (e.key === 'Enter') void saveStudentName(s);
+                                            if (e.key === 'Escape') setEditingStudentId(null);
+                                          }}
+                                          placeholder="Apellido"
+                                          maxLength={50}
+                                          className="text-sm font-bold bg-slate-800 border border-slate-600 rounded-lg px-2 py-1 w-24 text-white"
+                                        />
+                                        <button onClick={() => void saveStudentName(s)} disabled={studentRowBusy === s.id} className="p-1.5 text-emerald-300 hover:text-emerald-200" aria-label="Guardar">
+                                          {studentRowBusy === s.id ? <Spinner className="w-4 h-4" /> : <Check className="w-4 h-4" />}
+                                        </button>
+                                        <button onClick={() => setEditingStudentId(null)} className="p-1.5 text-slate-400 hover:text-white" aria-label="Cancelar">
+                                          <X className="w-4 h-4" />
+                                        </button>
+                                      </div>
+                                    ) : (
+                                      <div className="flex items-center gap-1 group/student">
+                                        <span className="text-sm font-bold text-slate-100">
+                                          {s.first_name} {s.last_name}
+                                        </span>
+                                        <button
+                                          onClick={() => startEditStudent(s)}
+                                          className="p-1 text-slate-500 hover:text-white opacity-60 group-hover/student:opacity-100 transition-opacity"
+                                          aria-label={`Renombrar a ${s.first_name} ${s.last_name}`}
+                                        >
+                                          <Pencil className="w-3 h-3" />
+                                        </button>
+                                        <button
+                                          onClick={() => setConfirmDeleteStudentId(s.id)}
+                                          className="p-1 text-slate-500 hover:text-red-400 opacity-60 group-hover/student:opacity-100 transition-opacity"
+                                          aria-label={`Quitar a ${s.first_name} ${s.last_name} del curso`}
+                                        >
+                                          <Trash2 className="w-3 h-3" />
+                                        </button>
+                                      </div>
+                                    )}
+
+                                    {progress ? (
+                                      <button
+                                        onClick={() => setOpenStudent({ id: s.id, name: `${s.first_name} ${s.last_name}` })}
+                                        className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-300 hover:text-white rounded-lg px-2 py-1 -mx-2 hover:bg-slate-800/70 transition-colors text-left"
+                                      >
+                                        <span className="inline-flex items-center gap-1 font-bold text-amber-300">
+                                          <Flame className="w-3.5 h-3.5" aria-hidden="true" /> {progress.total_xp} XP
+                                        </span>
+                                        <span className="inline-flex items-center gap-1">
+                                          <Star className="w-3.5 h-3.5 text-blue-300" aria-hidden="true" />
+                                          {progress.levels_passed}/20 niveles
+                                        </span>
+                                        <span className="hidden sm:inline text-slate-400">{timeAgo(progress.last_played_at)}</span>
+                                        <span className="text-emerald-300 underline">Ver detalle</span>
+                                      </button>
+                                    ) : (
+                                      <span className="text-xs text-slate-500">Sin datos</span>
+                                    )}
+                                  </div>
                                 )}
+                                {studentRowError[s.id] && <p className="text-xs text-red-400 mt-1">{studentRowError[s.id]}</p>}
                               </li>
                             );
                           })}
@@ -244,6 +445,47 @@ export default function TeacherPanel() {
               );
             })}
           </ul>
+
+          {archivedCourses.length > 0 && (
+            <div className="mt-6">
+              <button
+                onClick={() => setShowArchived((v) => !v)}
+                className="text-sm font-bold text-slate-400 hover:text-white inline-flex items-center gap-1.5"
+              >
+                {showArchived ? 'Ocultar' : 'Ver'} cursos archivados ({archivedCourses.length})
+              </button>
+              {showArchived && (
+                <ul className="space-y-2 mt-3">
+                  {archivedCourses.map((course) => {
+                    const list = students.filter((s) => s.course_id === course.id);
+                    return (
+                      <li key={course.id}>
+                        <Card className="opacity-70">
+                          <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div>
+                              <h3 className="text-base font-extrabold font-['Baloo_2']">{course.name}</h3>
+                              <p className="text-xs text-slate-400 mt-0.5">
+                                {list.length === 1 ? '1 estudiante' : `${list.length} estudiantes`} · archivado
+                              </p>
+                              {courseRowError[course.id] && <p className="text-xs text-red-400 mt-1">{courseRowError[course.id]}</p>}
+                            </div>
+                            <button
+                              onClick={() => void toggleCourseActive(course)}
+                              disabled={courseRowBusy === course.id}
+                              className="text-xs font-bold text-emerald-300 hover:text-emerald-200 bg-slate-800/70 hover:bg-slate-700 rounded-lg px-3 py-2 flex items-center gap-1.5"
+                            >
+                              {courseRowBusy === course.id ? <Spinner className="w-3.5 h-3.5" /> : <ArchiveRestore className="w-3.5 h-3.5" />}
+                              Reactivar
+                            </button>
+                          </div>
+                        </Card>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+          )}
         </>
       )}
 
