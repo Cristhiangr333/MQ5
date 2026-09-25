@@ -15,7 +15,7 @@ Juegos: Carrera Matemática, Batalla Matemática, Tienda Matemática, Construye 
 
 ## Stack
 
-React 19 · TypeScript · Vite · Tailwind CSS 4 · Three.js · (Fase 1) Supabase · Vercel
+React 19 · TypeScript · Vite · Tailwind CSS 4 · Three.js · Supabase · Vercel
 
 ## Desarrollo local
 
@@ -42,6 +42,6 @@ Sin `.env.local` la app muestra una pantalla de "falta configurar la conexión" 
 
 ## Estado
 
-Estudiantes con código de curso, docentes con cuenta propia. El juego ya usa el modelo real: **4 regiones (Bosque=Suma, Montaña=Resta, Ciudad=Multiplicación, Castillo=División) × 5 niveles cada una** (Carrera → Batalla → Puente → Tienda → Detective, con desbloqueo secuencial), preguntas leídas del banco real de Supabase, y el progreso (estrellas, XP, desbloqueo) se guarda de verdad con `submit_round()`. Ver `docs/DECISIONS.md` (ADR-003/006/007). Pendiente: que el panel docente muestre ese progreso real por estudiante (hoy solo lista los estudiantes del curso).
+Estudiantes con código de curso, docentes con cuenta propia. El juego usa el modelo real: **4 regiones (Bosque=Suma, Montaña=Resta, Ciudad=Multiplicación, Castillo=División) × 5 niveles cada una** (Carrera → Batalla → Puente → Tienda → Detective, con desbloqueo secuencial), preguntas leídas del banco real de Supabase, y el progreso (estrellas, XP, desbloqueo) se guarda de verdad con `submit_round()`. El panel docente ya muestra el progreso real por estudiante (XP, niveles pasados, última vez que jugó, detalle de los 20 niveles). El motor 3D es la vista principal — soporta arrastre táctil, se recupera solo si el navegador le quita memoria de GPU, y baja de calidad automáticamente en celulares de gama baja. Ver `docs/DECISIONS.md` (ADR-001 a ADR-007).
 
 Ruta de trabajo: Foundation → Core Experience → Game Systems → Progression → Teacher Dashboard → Polish → QA → Production.
