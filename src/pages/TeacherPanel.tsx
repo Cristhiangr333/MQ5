@@ -218,7 +218,7 @@ export default function TeacherPanel() {
                                 {progress ? (
                                   <button
                                     onClick={() => setOpenStudent({ id: s.id, name: `${s.first_name} ${s.last_name}` })}
-                                    className="flex items-center gap-3 text-xs text-slate-300 hover:text-white rounded-lg px-2 py-1 -mx-2 hover:bg-slate-800/70 transition-colors"
+                                    className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-300 hover:text-white rounded-lg px-2 py-1 -mx-2 hover:bg-slate-800/70 transition-colors text-left"
                                   >
                                     <span className="inline-flex items-center gap-1 font-bold text-amber-300">
                                       <Flame className="w-3.5 h-3.5" aria-hidden="true" /> {progress.total_xp} XP

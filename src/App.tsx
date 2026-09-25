@@ -363,7 +363,7 @@ export default function App({ playerName, courseName, onExit }: AppProps = {}) {
   // Keyboard Shortcuts (1, 2, 3 to answer, M for map)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'm' || e.key === 'M') {
+      if ((e.key === 'm' || e.key === 'M') && !isPaused) {
         setViewMode((v) => (v === 'map' ? 'game' : 'map'));
       } else if (e.key === 's' || e.key === 'S') {
         setIsMuted(toggleAudioMute());
