@@ -774,11 +774,13 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
 
     // 3. Renderer with safe WebGL creation
     let renderer: THREE.WebGLRenderer;
+    let contextRestored = false;
+    let contextLostFallbackTimer: number | undefined;
     try {
       renderer = new THREE.WebGLRenderer({
         antialias: !isMobileOrLowEnd,
         alpha: false,
-        powerPreference: 'high-performance',
+        powerPreference: isMobileOrLowEnd ? 'default' : 'high-performance',
       });
     } catch (err) {
       console.warn('WebGL Renderer initialization failed, switching to illustrated mode:', err);
@@ -796,6 +798,27 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
     rendererRef.current = renderer;
 
     container.appendChild(renderer.domElement);
+
+    // Pérdida de contexto WebGL: pasa sobre todo en celulares cuando el
+    // sistema necesita memoria de GPU para otra cosa (cambiar de app, quedarse
+    // sin RAM, etc.). Sin esto, la escena queda congelada/a medias para
+    // siempre. e.preventDefault() le pide al navegador la oportunidad de
+    // restaurar el contexto; si no se restaura solo, caemos al modo 2D.
+    const handleContextLost = (e: Event) => {
+      e.preventDefault();
+      console.warn('[ThreeWorldCanvas] Se perdió el contexto WebGL (probablemente por memoria en el dispositivo).');
+      if (animFrameIdRef.current) cancelAnimationFrame(animFrameIdRef.current);
+      contextLostFallbackTimer = window.setTimeout(() => {
+        if (!contextRestored) onWebGLError?.();
+      }, 2000);
+    };
+    const handleContextRestored = () => {
+      contextRestored = true;
+      if (contextLostFallbackTimer) window.clearTimeout(contextLostFallbackTimer);
+      console.info('[ThreeWorldCanvas] Contexto WebGL restaurado.');
+    };
+    renderer.domElement.addEventListener('webglcontextlost', handleContextLost, false);
+    renderer.domElement.addEventListener('webglcontextrestored', handleContextRestored, false);
 
     // 4. Procedural Gradient Sky Dome
     const skyDome = createProceduralSky();
@@ -986,6 +1009,9 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
       domEl.removeEventListener('touchstart', handlePointerDown);
       window.removeEventListener('touchmove', handlePointerMove);
       window.removeEventListener('touchend', handlePointerUp);
+      renderer.domElement.removeEventListener('webglcontextlost', handleContextLost);
+      renderer.domElement.removeEventListener('webglcontextrestored', handleContextRestored);
+      if (contextLostFallbackTimer) window.clearTimeout(contextLostFallbackTimer);
 
       if (animFrameIdRef.current) cancelAnimationFrame(animFrameIdRef.current);
       if (rendererRef.current && rendererRef.current.domElement) {
@@ -3883,7 +3909,7 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
   useEffect(() => {
     let clock = new THREE.Clock();
 
-    const renderLoop = () => {
+    const renderFrame = () => {
       const delta = clock.getDelta();
       const time = clock.getElapsedTime();
 
@@ -4333,7 +4359,25 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
       if (rendererRef.current && sceneRef.current && cameraRef.current) {
         rendererRef.current.render(sceneRef.current, cameraRef.current);
       }
+    };
 
+    // Un solo frame roto (por ejemplo, un personaje que todavía no terminó de
+    // construirse cuando llega el primer frame -- más común en celulares más
+    // lentos) ya no debe congelar el juego entero: si renderFrame() lanza un
+    // error, lo registramos y seguimos programando el siguiente frame igual.
+    const renderLoop = () => {
+      try {
+        renderFrame();
+      } catch (err) {
+        console.error('[ThreeWorldCanvas] Error en un frame, se continúa con el siguiente:', err);
+        if (rendererRef.current && sceneRef.current && cameraRef.current) {
+          try {
+            rendererRef.current.render(sceneRef.current, cameraRef.current);
+          } catch {
+            // si hasta el render de emergencia falla, no hay nada más que hacer este frame
+          }
+        }
+      }
       animFrameIdRef.current = requestAnimationFrame(renderLoop);
     };
 
