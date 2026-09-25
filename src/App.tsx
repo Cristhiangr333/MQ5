@@ -222,7 +222,7 @@ export default function App({ playerName, courseName, onExit }: AppProps = {}) {
   // Answer handler
   const handleSelectOption = useCallback(
     (option: number | null) => {
-      if (session.isAnswered || session.gameOver || session.gameWon || isPaused) return;
+      if (session.isAnswered || session.gameOver || session.gameWon || isPaused || tutorialGameMode) return;
 
       const currentQ = session.questions[session.activeQuestionIndex];
       if (!currentQ) return;
@@ -325,7 +325,7 @@ export default function App({ playerName, courseName, onExit }: AppProps = {}) {
         });
       }, 1400);
     },
-    [session, currentGameModeId, stats.combo, stats.lives, finishRound, isPaused],
+    [session, currentGameModeId, stats.combo, stats.lives, finishRound, isPaused, tutorialGameMode],
   );
 
   // Timer Tick Effect
@@ -336,7 +336,8 @@ export default function App({ playerName, courseName, onExit }: AppProps = {}) {
       session.isAnswered ||
       session.gameOver ||
       session.gameWon ||
-      isPaused
+      isPaused ||
+      tutorialGameMode
     ) {
       if (timerRef.current) clearInterval(timerRef.current);
       return;
@@ -358,7 +359,7 @@ export default function App({ playerName, courseName, onExit }: AppProps = {}) {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [viewMode, session.isTimerActive, session.isAnswered, session.gameOver, session.gameWon, isPaused, handleSelectOption]);
+  }, [viewMode, session.isTimerActive, session.isAnswered, session.gameOver, session.gameWon, isPaused, tutorialGameMode, handleSelectOption]);
 
   // Keyboard Shortcuts (1, 2, 3 to answer, M for map)
   useEffect(() => {

@@ -57,7 +57,7 @@ export function getWeatherInfo(worldId: string, viewMode: 'map' | 'game'): Weath
       };
     case 'castillo':
       return {
-        name: 'Castillo del Saber',
+        name: 'Castillo de la División',
         condition: 'Aurora Boreal Mística',
         icon: '🌌',
         color: 'text-purple-300',
