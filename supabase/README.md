@@ -11,6 +11,7 @@ Las migraciones se ejecutan **a mano** en el panel de Supabase: **SQL Editor →
 | `0005_attempts_and_progress.sql` | Rondas, intentos, estrellas, XP y desbloqueo — todo calculado en el servidor |
 | `0006_teacher_progress.sql` | Progreso real por estudiante (XP, niveles, aciertos) para el panel docente |
 | `0007_expand_low_difficulty_mult_div.sql` | Amplía Multiplicación/División en dificultad 1 (tabla del 1) |
+| `0008_prevent_duplicate_students.sql` | `register_student()`: mismo nombre en el curso → continúa el progreso en vez de duplicar |
 
 Cada migración tiene su deshacer en `rollbacks/`.
 
@@ -98,4 +99,21 @@ left join public.questions q
 where r.id in ('ciudad','castillo')
 group by r.name, r.sort_order, gm.name, gm.sort_order, gm.questions_per_round
 order by r.sort_order, gm.sort_order;
+```
+
+## Verificación de la 0008
+Motivo: un mismo estudiante podía quedar duplicado en el panel docente si
+jugaba desde más de un dispositivo (o borraba el caché) — ver ADR-009 en
+`docs/DECISIONS.md`. Después de correrla, revisa que no queden duplicados
+**de antes** del arreglo (la migración no los fusiona retroactivamente, solo
+evita que se creen nuevos):
+```sql
+-- Si aparece alguna fila aquí, son estudiantes duplicados de ANTES de la
+-- 0008 (mismo nombre, mismo curso) que conviene fusionar a mano en Supabase
+-- (decidir cuál fila se queda, mover sus attempts/rounds si hace falta, y
+-- borrar la otra).
+select course_id, lower(first_name) as nombre, lower(last_name) as apellido, count(*)
+from public.students
+group by 1,2,3
+having count(*) > 1;
 ```
