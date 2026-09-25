@@ -9,6 +9,7 @@ import { QuestionPanel } from './components/QuestionPanel';
 import { RegionLevelStrip } from './components/RegionLevelStrip';
 import { GameOverModal } from './components/GameOverModal';
 import { GameModeTutorial } from './components/GameModeTutorial';
+import { PauseModal } from './components/PauseModal';
 import { Play, Compass, LogOut, Loader2, AlertTriangle } from 'lucide-react';
 
 const MAX_LIVES = 3;
@@ -112,6 +113,8 @@ export default function App({ playerName, courseName, onExit }: AppProps = {}) {
   // Si no es null, hay un tutorial de "así se juega" bloqueando la pantalla
   // (primera vez que este dispositivo entra a este tipo de juego).
   const [tutorialGameMode, setTutorialGameMode] = useState<GameMode | null>(null);
+  // Pausa manual: detiene el cronómetro sin tocar el resto del estado de la ronda.
+  const [isPaused, setIsPaused] = useState(false);
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const submittedRef = useRef(false);
@@ -145,6 +148,7 @@ export default function App({ playerName, courseName, onExit }: AppProps = {}) {
     setViewMode('game');
     setLevelLoading(true);
     setLevelError(null);
+    setIsPaused(false);
     submittedRef.current = false;
     try {
       const { questions, config } = await fetchQuestionsForLevel(regionId, gameModeId);
@@ -218,7 +222,7 @@ export default function App({ playerName, courseName, onExit }: AppProps = {}) {
   // Answer handler
   const handleSelectOption = useCallback(
     (option: number | null) => {
-      if (session.isAnswered || session.gameOver || session.gameWon) return;
+      if (session.isAnswered || session.gameOver || session.gameWon || isPaused) return;
 
       const currentQ = session.questions[session.activeQuestionIndex];
       if (!currentQ) return;
@@ -321,12 +325,19 @@ export default function App({ playerName, courseName, onExit }: AppProps = {}) {
         });
       }, 1400);
     },
-    [session, currentGameModeId, stats.combo, stats.lives, finishRound],
+    [session, currentGameModeId, stats.combo, stats.lives, finishRound, isPaused],
   );
 
   // Timer Tick Effect
   useEffect(() => {
-    if (viewMode !== 'game' || !session.isTimerActive || session.isAnswered || session.gameOver || session.gameWon) {
+    if (
+      viewMode !== 'game' ||
+      !session.isTimerActive ||
+      session.isAnswered ||
+      session.gameOver ||
+      session.gameWon ||
+      isPaused
+    ) {
       if (timerRef.current) clearInterval(timerRef.current);
       return;
     }
@@ -347,7 +358,7 @@ export default function App({ playerName, courseName, onExit }: AppProps = {}) {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [viewMode, session.isTimerActive, session.isAnswered, session.gameOver, session.gameWon, handleSelectOption]);
+  }, [viewMode, session.isTimerActive, session.isAnswered, session.gameOver, session.gameWon, isPaused, handleSelectOption]);
 
   // Keyboard Shortcuts (1, 2, 3 to answer, M for map)
   useEffect(() => {
@@ -359,7 +370,7 @@ export default function App({ playerName, courseName, onExit }: AppProps = {}) {
       } else if (e.key === 'v' || e.key === 'V') {
         const btn = document.getElementById('engine-toggle-btn');
         if (btn) btn.click();
-      } else if (['1', '2', '3'].includes(e.key) && viewMode === 'game' && !session.isAnswered && !tutorialGameMode) {
+      } else if (['1', '2', '3'].includes(e.key) && viewMode === 'game' && !session.isAnswered && !tutorialGameMode && !isPaused) {
         const idx = parseInt(e.key) - 1;
         const q = session.questions[session.activeQuestionIndex];
         if (q && q.options[idx] !== undefined) {
@@ -369,7 +380,7 @@ export default function App({ playerName, courseName, onExit }: AppProps = {}) {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [viewMode, session, handleSelectOption, tutorialGameMode]);
+  }, [viewMode, session, handleSelectOption, tutorialGameMode, isPaused]);
 
   const activeQuestion = session.questions[session.activeQuestionIndex] || null;
 
@@ -458,6 +469,16 @@ export default function App({ playerName, courseName, onExit }: AppProps = {}) {
           onToggleSound={() => setIsMuted(toggleAudioMute())}
           onOpenMap={() => setViewMode((v) => (v === 'map' ? 'game' : 'map'))}
           onResetGame={() => initLevelSession(currentRegionId, currentGameModeId)}
+          onPause={
+            viewMode === 'game' &&
+            !levelLoading &&
+            !levelError &&
+            !session.gameOver &&
+            !session.gameWon &&
+            !tutorialGameMode
+              ? () => setIsPaused(true)
+              : undefined
+          }
         />
 
         <section className="relative w-full">
@@ -570,6 +591,15 @@ export default function App({ playerName, courseName, onExit }: AppProps = {}) {
       />
 
       <GameModeTutorial gameMode={tutorialGameMode} onDismiss={handleDismissTutorial} />
+
+      <PauseModal
+        isOpen={isPaused}
+        onResume={() => setIsPaused(false)}
+        onGoToMap={() => {
+          setIsPaused(false);
+          setViewMode('map');
+        }}
+      />
     </div>
   );
 }
