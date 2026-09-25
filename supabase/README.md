@@ -9,6 +9,8 @@ Las migraciones se ejecutan **a mano** en el panel de Supabase: **SQL Editor →
 | `0003_teacher_signup.sql` | Registro de docentes con código de institución |
 | `0004_recalibrate_levels.sql` | Progresión de los 5 niveles y ampliación del banco de Resta |
 | `0005_attempts_and_progress.sql` | Rondas, intentos, estrellas, XP y desbloqueo — todo calculado en el servidor |
+| `0006_teacher_progress.sql` | Progreso real por estudiante (XP, niveles, aciertos) para el panel docente |
+| `0007_expand_low_difficulty_mult_div.sql` | Amplía Multiplicación/División en dificultad 1 (tabla del 1) |
 
 Cada migración tiene su deshacer en `rollbacks/`.
 
@@ -74,3 +76,26 @@ Para probarla de verdad, juega una ronda desde la app una vez esté conectada (F
 
 ## Variables del frontend
 Solo la URL y la clave pública (`anon` / *publishable*). **Nunca** la `service_role`. Ver `.env.example`.
+
+## Verificación de la 0007
+Motivo: Carrera Matemática (dificultad fija 1) en Ciudad y Castillo solo tenía 6
+preguntas disponibles para una ronda de 5 — ver auditoría de funcionalidad en
+`docs/DECISIONS.md`.
+```sql
+-- Debe devolver 1674 (1572 antes de la 0007 + 102 nuevas)
+select count(*) from public.questions;
+
+-- Debe devolver 23 en las 2 filas de "Carrera Matemática" (antes: 6)
+select
+  r.name as region, gm.name as juego,
+  count(q.id) as preguntas_disponibles, gm.questions_per_round
+from public.regions r
+cross join public.game_modes gm
+left join public.questions q
+  on q.region_id = r.id and q.is_active = true
+  and q.kind = any(gm.question_kinds)
+  and q.difficulty between gm.difficulty_min and gm.difficulty_max
+where r.id in ('ciudad','castillo')
+group by r.name, r.sort_order, gm.name, gm.sort_order, gm.questions_per_round
+order by r.sort_order, gm.sort_order;
+```
