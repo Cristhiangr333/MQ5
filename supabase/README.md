@@ -12,6 +12,7 @@ Las migraciones se ejecutan **a mano** en el panel de Supabase: **SQL Editor →
 | `0006_teacher_progress.sql` | Progreso real por estudiante (XP, niveles, aciertos) para el panel docente |
 | `0007_expand_low_difficulty_mult_div.sql` | Amplía Multiplicación/División en dificultad 1 (tabla del 1) |
 | `0008_prevent_duplicate_students.sql` | `register_student()`: mismo nombre en el curso → continúa el progreso en vez de duplicar |
+| `0009_restrict_question_bank_access.sql` | Cierra el acceso directo a `questions`: ya solo se lee a través de `get_round_questions()` |
 
 Cada migración tiene su deshacer en `rollbacks/`.
 
@@ -117,3 +118,19 @@ from public.students
 group by 1,2,3
 having count(*) > 1;
 ```
+
+## Verificación de la 0009
+Motivo: cualquier sesión de estudiante podía leer el banco completo de
+preguntas (con las respuestas correctas) directamente, no solo las de su
+ronda — ver ADR-010 en `docs/DECISIONS.md`.
+```sql
+-- Debe devolver `false`: ya nadie con sesión normal puede leer questions directo
+select has_table_privilege('authenticated', 'public.questions', 'select');
+
+-- Debe devolver 5 filas con su correct_answer (así sigue jugando el estudiante,
+-- solo que ahora por esta función en vez de la tabla directa)
+select * from public.get_round_questions('bosque', 'race');
+```
+Después de correrla, juega una ronda desde la app (o pide a un estudiante de
+prueba que lo haga) para confirmar que el juego sigue funcionando igual que
+antes — este cambio no debería notarse desde afuera.
