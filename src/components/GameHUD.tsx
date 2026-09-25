@@ -1,5 +1,5 @@
 import React from 'react';
-import { Volume2, VolumeX, Map, BarChart3, RotateCcw } from 'lucide-react';
+import { Volume2, VolumeX, Map, BarChart3, RotateCcw, Pause } from 'lucide-react';
 import { LevelDisplayInfo } from '../types';
 
 interface GameHUDProps {
@@ -16,6 +16,7 @@ interface GameHUDProps {
   onOpenMap: () => void;
   onOpenReport?: () => void;
   onResetGame: () => void;
+  onPause?: () => void;
 }
 
 export const GameHUD: React.FC<GameHUDProps> = ({
@@ -32,6 +33,7 @@ export const GameHUD: React.FC<GameHUDProps> = ({
   onOpenMap,
   onOpenReport,
   onResetGame,
+  onPause,
 }) => {
   const progressPct = Math.min(100, (questionIndex / Math.max(1, totalQuestions)) * 100);
 
@@ -117,6 +119,16 @@ export const GameHUD: React.FC<GameHUDProps> = ({
 
         {/* Action Controls */}
         <div className="flex items-center gap-1 border-l border-slate-800 pl-2">
+          {viewMode === 'game' && onPause && (
+            <button
+              onClick={onPause}
+              className="p-1.5 text-slate-400 hover:text-white bg-slate-800/70 hover:bg-slate-700 rounded-lg transition-colors"
+              title="Pausar"
+            >
+              <Pause className="w-4 h-4" />
+            </button>
+          )}
+
           {viewMode === 'game' && (
             <button
               onClick={onResetGame}
