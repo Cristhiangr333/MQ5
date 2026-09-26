@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
-import { Archive, ArchiveRestore, Check, Copy, Flame, LogOut, Pencil, Plus, Star, Trash2, Users, X } from 'lucide-react';
+import { Archive, ArchiveRestore, Check, Copy, Flame, LogOut, Pencil, Plus, RefreshCw, Star, Trash2, Users, X } from 'lucide-react';
 import { useAuth } from '../auth/AuthProvider';
 import { supabase } from '../lib/supabase';
 import { friendlyError } from '../lib/errors';
@@ -57,10 +57,13 @@ export default function TeacherPanel() {
   const [studentRowBusy, setStudentRowBusy] = useState<string | null>(null);
   const [studentRowError, setStudentRowError] = useState<Record<string, string>>({});
 
-  const loadCourseProgress = useCallback(async (courseId: string) => {
+  type SortKey = 'name' | 'least_progress' | 'inactive';
+  const [sortByCourse, setSortByCourse] = useState<Record<string, SortKey>>({});
+
+  const loadCourseProgress = useCallback(async (courseId: string, force = false) => {
     setProgressByCourse((prev) => {
-      if (prev[courseId]) return prev; // ya cargado o cargando: no repetir la consulta
-      return { ...prev, [courseId]: { status: 'loading', rows: [] } };
+      if (prev[courseId] && !force) return prev; // ya cargado (y no se pidió forzar): no repetir la consulta
+      return { ...prev, [courseId]: { status: 'loading', rows: prev[courseId]?.rows ?? [] } };
     });
     try {
       const rows = await fetchCourseProgress(courseId);
@@ -184,6 +187,37 @@ export default function TeacherPanel() {
     if (error) return setStudentRowError((prev) => ({ ...prev, [s.id]: friendlyError(error) }));
     setStudents((prev) => prev.filter((row) => row.id !== s.id));
     setConfirmDeleteStudentId(null);
+  }
+
+  /** Nunca jugó, o no juega hace 14+ días: una señal simple para resaltar en la lista. */
+  function needsAttention(progress: StudentProgressSummary | undefined): boolean {
+    if (!progress) return false;
+    if (progress.rounds_played === 0) return true;
+    if (!progress.last_played_at) return true;
+    const days = (Date.now() - new Date(progress.last_played_at).getTime()) / 86_400_000;
+    return days >= 14;
+  }
+
+  /** Ordena la lista de un curso según lo elegido: alfabético (por defecto),
+   * quién va más atrás primero, o quién lleva más tiempo sin jugar primero.
+   * Los que todavía no tienen datos de progreso siempre quedan al final. */
+  function sortStudents(courseId: string, list: StudentRow[]): StudentRow[] {
+    const sortKey = sortByCourse[courseId] ?? 'name';
+    if (sortKey === 'name') return list;
+    const rows = progressByCourse[courseId]?.rows ?? [];
+    const progressOf = (s: StudentRow) => rows.find((r) => r.student_id === s.id);
+    return [...list].sort((a, b) => {
+      const pa = progressOf(a);
+      const pb = progressOf(b);
+      if (!pa && !pb) return 0;
+      if (!pa) return 1; // sin datos: al final
+      if (!pb) return -1;
+      if (sortKey === 'least_progress') return pa.levels_passed - pb.levels_passed;
+      // 'inactive': nunca jugó primero, luego de más antiguo a más reciente
+      const ta = pa.last_played_at ? new Date(pa.last_played_at).getTime() : -Infinity;
+      const tb = pb.last_played_at ? new Date(pb.last_played_at).getTime() : -Infinity;
+      return ta - tb;
+    });
   }
 
   if (state.status === 'loading') return <FullScreenLoader />;
@@ -312,6 +346,32 @@ export default function TeacherPanel() {
                       <summary className="cursor-pointer min-h-10 inline-flex items-center text-sm font-bold text-slate-300 hover:text-white">
                         Ver estudiantes y su progreso
                       </summary>
+                      {progressByCourse[course.id] && progressByCourse[course.id].status !== 'loading' && list.length > 0 && (
+                        <div className="flex flex-wrap items-center gap-3 mt-2">
+                          <button
+                            onClick={() => void loadCourseProgress(course.id, true)}
+                            disabled={progressByCourse[course.id]?.status === 'loading'}
+                            className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-400 hover:text-white"
+                          >
+                            <RefreshCw className="w-3.5 h-3.5" aria-hidden="true" />
+                            Actualizar progreso
+                          </button>
+                          <label className="text-xs text-slate-400 flex items-center gap-1.5">
+                            Ordenar por
+                            <select
+                              value={sortByCourse[course.id] ?? 'name'}
+                              onChange={(e) =>
+                                setSortByCourse((prev) => ({ ...prev, [course.id]: e.target.value as SortKey }))
+                              }
+                              className="bg-slate-800 border border-slate-600 rounded-lg px-2 py-1 text-slate-100 text-xs"
+                            >
+                              <option value="name">Nombre (A-Z)</option>
+                              <option value="least_progress">Quién va más atrás</option>
+                              <option value="inactive">Quién lleva más tiempo sin jugar</option>
+                            </select>
+                          </label>
+                        </div>
+                      )}
                       {list.length === 0 ? (
                         <p className="text-sm text-slate-400 mt-2">Aún no hay estudiantes. Comparte el código para que se unan.</p>
                       ) : progressByCourse[course.id]?.status === 'loading' || !progressByCourse[course.id] ? (
@@ -331,7 +391,7 @@ export default function TeacherPanel() {
                         </div>
                       ) : (
                         <ul className="mt-2 divide-y divide-slate-800">
-                          {list.map((s) => {
+                          {sortStudents(course.id, list).map((s) => {
                             const progress = progressByCourse[course.id]?.rows.find((r) => r.student_id === s.id);
                             const isEditing = editingStudentId === s.id;
                             const isConfirmingDelete = confirmDeleteStudentId === s.id;
@@ -396,6 +456,11 @@ export default function TeacherPanel() {
                                         <span className="text-sm font-bold text-slate-100">
                                           {s.first_name} {s.last_name}
                                         </span>
+                                        {needsAttention(progress) && (
+                                          <span title="Nunca ha jugado o lleva 14+ días sin jugar" aria-label="Necesita atención">
+                                            ⚠️
+                                          </span>
+                                        )}
                                         <button
                                           onClick={() => startEditStudent(s)}
                                           className="p-1 text-slate-500 hover:text-white opacity-60 group-hover/student:opacity-100 transition-opacity"
