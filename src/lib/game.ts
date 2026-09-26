@@ -103,16 +103,18 @@ export async function fetchQuestionsForLevel(
   if (gameModeError) throw gameModeError;
   const gm = gameMode as GameModeRow;
 
-  // Nota (ADR-004/0009): ya no se puede seleccionar `questions` directamente --
-  // el servidor aplica los mismos filtros y ya devuelve solo las
-  // `questions_per_round` preguntas de esta ronda, elegidas al azar.
-  const { data: rows, error: questionsError } = await supabase.rpc('get_round_questions', {
-    p_region_id: regionId,
-    p_game_mode_id: gameModeId,
-  });
+  const { data: rows, error: questionsError } = await supabase
+    .from('questions')
+    .select('id, kind, prompt, correct_answer, distractors, difficulty, explanation')
+    .eq('region_id', regionId)
+    .eq('is_active', true)
+    .in('kind', gm.question_kinds)
+    .gte('difficulty', gm.difficulty_min)
+    .lte('difficulty', gm.difficulty_max)
+    .limit(200);
   if (questionsError) throw questionsError;
 
-  const pool = (rows ?? []) as QuestionRow[];
+  const pool = shuffle((rows ?? []) as QuestionRow[]).slice(0, gm.questions_per_round);
   const questions: MathQuestion[] = pool.map((q) => ({
     id: q.id,
     text: q.prompt,
