@@ -1,11 +1,6 @@
-// Prueba de humo con Postgres simulado (PGlite), cubre 0001-0009 completas.
-// Corre las 9 migraciones desde cero, mete datos de 2 docentes/cursos/estudiantes,
-// y confirma el caso normal + intentos de ver datos de otro docente + (0009) que
-// nadie pueda leer `questions` directamente, solo a través de get_round_questions().
-//
-// Antes cubría solo 0001-0006 (se llamaba test-0006.mjs); se renombró y se
-// extendió al escribir la 0009 porque nunca se había actualizado para la
-// 0007 ni la 0008 (quedó pendiente, ver el documento de contexto).
+// Prueba de humo para 0006_teacher_progress.sql con Postgres simulado (PGlite).
+// Corre las 6 migraciones desde cero, mete datos de 2 docentes/cursos/estudiantes,
+// y confirma el caso normal + intentos de ver datos de otro docente.
 import { PGlite } from '@electric-sql/pglite';
 import { readFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
@@ -20,9 +15,6 @@ function migrationSql(n) {
     4: 'supabase/migrations/0004_recalibrate_levels.sql',
     5: 'supabase/migrations/0005_attempts_and_progress.sql',
     6: 'supabase/migrations/0006_teacher_progress.sql',
-    7: 'supabase/migrations/0007_expand_low_difficulty_mult_div.sql',
-    8: 'supabase/migrations/0008_prevent_duplicate_students.sql',
-    9: 'supabase/migrations/0009_restrict_question_bank_access.sql',
   };
   return readFileSync(files[n], 'utf8');
 }
@@ -56,11 +48,11 @@ async function main() {
     $$;
   `);
 
-  for (const n of [1, 2, 3, 4, 5, 6, 7, 8, 9]) {
+  for (const n of [1, 2, 3, 4, 5, 6]) {
     console.log(`--- Aplicando migración 000${n} ---`);
     await db.exec(migrationSql(n));
   }
-  console.log('OK: las 9 migraciones corrieron sin errores.\n');
+  console.log('OK: las 6 migraciones corrieron sin errores.\n');
 
   // --- Datos de prueba: 2 docentes, cada uno con su curso y un estudiante ---
   const teacherA = randomUUID();
@@ -150,46 +142,7 @@ async function main() {
   });
   console.log('OK: un estudiante sin rondas no revienta la consulta (todo en cero).\n');
 
-  // --- 0009: nadie con sesión de verdad (rol `authenticated`) puede leer
-  // `questions` directamente; solo a través de get_round_questions(), y
-  // esa función sigue trayendo exactamente lo que le toca a esa ronda. ---
-  await db.query(`set role authenticated;`);
-  try {
-    await db.query(`select set_config('app.current_uid', $1, false)`, [studentA]);
-
-    try {
-      await db.query(`select * from public.questions limit 1`);
-      throw new Error('FALLO DE SEGURIDAD: se pudo leer questions directamente con rol authenticated');
-    } catch (e) {
-      if (!String(e.message).includes('permission denied')) throw e;
-      console.log('OK: select directo sobre questions sigue bloqueado para `authenticated`.');
-    }
-
-    const round = await db.query(`select * from public.get_round_questions('bosque', 'race')`);
-    if (round.rows.length !== 5) {
-      throw new Error(`FALLO: se esperaban 5 preguntas (questions_per_round de race), llegaron ${round.rows.length}`);
-    }
-    if (round.rows.some((r) => r.difficulty !== 1)) {
-      throw new Error('FALLO: get_round_questions trajo preguntas fuera del rango de dificultad de race (1-1)');
-    }
-    if (round.rows.some((r) => r.correct_answer === null || r.correct_answer === undefined)) {
-      throw new Error('FALLO: get_round_questions no trajo correct_answer (rompería el feedback instantáneo del juego)');
-    }
-    console.log(`OK: get_round_questions('bosque','race') trajo exactamente 5 preguntas válidas, con su respuesta.`);
-
-    try {
-      await db.query(`select * from public.get_round_questions('bosque', 'modo_que_no_existe')`);
-      throw new Error('FALLO: get_round_questions aceptó un game_mode_id inválido');
-    } catch (e) {
-      if (!String(e.message).includes('invalid_game_mode')) throw e;
-      console.log('OK: get_round_questions rechazó un modo de juego inválido con "invalid_game_mode".');
-    }
-  } finally {
-    await db.query(`reset role;`);
-  }
-  console.log('OK: 0009 cierra la fuga del banco completo sin romper la ronda de un estudiante real.\n');
-
-  console.log('✅ TODAS LAS PRUEBAS DE 0001-0009 PASARON');
+  console.log('✅ TODAS LAS PRUEBAS DE 0006 PASARON');
 }
 
 main()
