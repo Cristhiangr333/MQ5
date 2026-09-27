@@ -668,6 +668,22 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
   // totalQuestions/bridgeBuiltSegments cambian.
   const totalQuestionsRef = useRef(totalQuestions);
   totalQuestionsRef.current = totalQuestions;
+  // Mismo motivo que totalQuestionsRef: estos tres valores se leen dentro del
+  // efecto "Handle Response Animation" (más abajo) pero NO deben estar en sus
+  // dependencias. Antes lo estaban -- junto con heroHp/enemyHp/cluesFound/
+  // shopCartTotal, que ni siquiera se usan ahí -- así que cualquier cambio de
+  // esos valores (aunque isCorrect siguiera igual) relanzaba una animación de
+  // ataque/carrera NUEVA por encima de la anterior sin cancelarla, dos loops
+  // de requestAnimationFrame peleándose por la misma posición del personaje.
+  // Eso es el bug visual reportado en Batalla (y presente, menos visible, en
+  // los demás juegos) -- y por qué salir al mapa y volver "lo arreglaba": el
+  // efecto de reconstrucción de región crea personajes nuevos y limpios.
+  const raceProgressRef = useRef(raceProgress);
+  raceProgressRef.current = raceProgress;
+  const bridgeBuiltSegmentsRef = useRef(bridgeBuiltSegments);
+  bridgeBuiltSegmentsRef.current = bridgeBuiltSegments;
+  const questionIndexRef = useRef(questionIndex);
+  questionIndexRef.current = questionIndex;
 
   // Dynamic references for animated scene objects
   const runnerCharRef = useRef<RunnerCharacterResult | null>(null);
@@ -3135,7 +3151,7 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
         // Runner pushes forward with a sustained, powerful burst of speed (1300ms)
         // Stays at new position permanently, maintaining forward momentum
         runnerStumbleActiveRef.current = false;
-        const targetZ = THREE.MathUtils.lerp(4, -8, Math.min(1, (raceProgress || 0) / 100));
+        const targetZ = THREE.MathUtils.lerp(4, -8, Math.min(1, (raceProgressRef.current || 0) / 100));
 
         // Smoothly adjust camera along with runner to follow progress down the track
         targetCamPos.current.set(0, 4.2, Math.max(-4.5, targetZ + 4.5));
@@ -3556,11 +3572,11 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
       }
     } else if (gameMode === 'bridge' && bridgeWalkerRef.current) {
       const walker = bridgeWalkerRef.current;
-      const totalSegs = totalQuestions || 5;
+      const totalSegs = totalQuestionsRef.current || 5;
       const startX = -2.6;
       const endX = 2.6;
       const currentX = walker.position.x;
-      const targetX = startX + (bridgeBuiltSegments / totalSegs) * (endX - startX);
+      const targetX = startX + (bridgeBuiltSegmentsRef.current / totalSegs) * (endX - startX);
       const startTime = performance.now();
 
       if (isCorrect) {
@@ -3654,7 +3670,7 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
         requestAnimationFrame(anim);
       }
     } else if (gameMode === 'detective' && castleLockBarsRef.current.length > 0) {
-      const activeIdx = Math.min(questionIndex, 4);
+      const activeIdx = Math.min(questionIndexRef.current, 4);
       const activeBar = castleLockBarsRef.current[activeIdx];
       const beam = castleBeamMeshRef.current;
       const doorLeft = castleDoorLeftRef.current;
@@ -3680,8 +3696,8 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
               activeBar.material.color.setHex(0xfbbf24);
               activeBar.material.emissive.setHex(0xd97706);
             }
-            const openFactor = Math.min((questionIndex + 1) / 5, 1.0);
-            const maxAngle = questionIndex >= 4 ? 1.25 : openFactor * 0.65;
+            const openFactor = Math.min((questionIndexRef.current + 1) / 5, 1.0);
+            const maxAngle = questionIndexRef.current >= 4 ? 1.25 : openFactor * 0.65;
             if (doorLeft) doorLeft.rotation.y = -THREE.MathUtils.lerp(0, maxAngle, elapsed);
             if (doorRight) doorRight.rotation.y = THREE.MathUtils.lerp(0, maxAngle, elapsed);
 
@@ -3721,7 +3737,16 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
         requestAnimationFrame(anim);
       }
     }
-  }, [isCorrect, gameMode, heroHp, enemyHp, raceProgress, bridgeBuiltSegments, questionIndex, totalQuestions, cluesFound, shopCartTotal]);
+    // heroHp/enemyHp/cluesFound/shopCartTotal no se usan en este efecto (eran
+    // dependencias espurias). raceProgress/bridgeBuiltSegments/questionIndex/
+    // totalQuestions sí se usan pero se leen por ref (arriba) para que SOLO
+    // una respuesta real (isCorrect null -> valor) dispare una animación:
+    // antes, cualquiera de esos 8 valores cambiando volvía a ejecutar este
+    // efecto con isCorrect todavía en true/false, lanzando un SEGUNDO loop de
+    // requestAnimationFrame por encima del anterior (sin cancelarlo) sobre el
+    // mismo personaje -- el bug visual de Batalla reportado.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isCorrect, gameMode]);
 
   // Handle Win/Loss Animations in 3D
   useEffect(() => {
