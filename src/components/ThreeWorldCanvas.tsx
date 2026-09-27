@@ -657,6 +657,17 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
   gameWonRef.current = gameWon;
   const gameOverRef = useRef(gameOver);
   gameOverRef.current = gameOver;
+  // totalQuestions llega en 0 al entrar a un nivel y cambia a su valor real
+  // apenas responde Supabase (ver fetchQuestionsForLevel). Antes ese cambio
+  // estaba en las deps del efecto de reconstrucción de región (~2000 líneas)
+  // y provocaba un SEGUNDO rebuild completo de toda la escena 3D justo al
+  // terminar de cargar las preguntas (la sensación de "se traba al iniciar").
+  // Con la ref, el efecto pesado usa siempre el valor más reciente sin volver
+  // a dispararse por este cambio; el efecto liviano de abajo
+  // (renderBridgeSegments) ya se encarga de refrescar el puente cuando
+  // totalQuestions/bridgeBuiltSegments cambian.
+  const totalQuestionsRef = useRef(totalQuestions);
+  totalQuestionsRef.current = totalQuestions;
 
   // Dynamic references for animated scene objects
   const runnerCharRef = useRef<RunnerCharacterResult | null>(null);
@@ -2548,7 +2559,7 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
         // Dynamic Bridge Segments Group
         const bridgeGroup = new THREE.Group();
         bridgeSegmentsGroupRef.current = bridgeGroup;
-        renderBridgeSegments(bridgeGroup, bridgeBuiltSegments, totalQuestions);
+        renderBridgeSegments(bridgeGroup, bridgeBuiltSegments, totalQuestionsRef.current);
         rootGroup.add(bridgeGroup);
 
         // Victory Flag on Destination Cliff (Plants on win)
@@ -2576,7 +2587,7 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
 
         // Character walking across the bridge (Sculpted explorer with ranger hat, vest pockets, pack & staff)
         const walkerObj = createExplorerCharacter();
-        const walkerX = -2.6 + (bridgeBuiltSegments / Math.max(1, totalQuestions)) * 5.2;
+        const walkerX = -2.6 + (bridgeBuiltSegments / Math.max(1, totalQuestionsRef.current)) * 5.2;
         walkerObj.group.position.set(walkerX, 1.12, 0);
         walkerObj.group.rotation.y = Math.PI / 2;
         rootGroup.add(walkerObj.group);
@@ -3070,7 +3081,11 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
     }
 
     scene.add(rootGroup);
-  }, [viewMode, currentRegionId, gameMode, totalQuestions]);
+    // totalQuestions se lee vía totalQuestionsRef (ver arriba) a propósito:
+    // no debe estar aquí. Si se cambia, este efecto reconstruye TODA la
+    // escena 3D (~2000 líneas de geometría) y no hace falta para ese cambio.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewMode, currentRegionId, gameMode]);
 
   // Update Dynamic Bridge Segments and advance walker when bridgeBuiltSegments changes
   useEffect(() => {
