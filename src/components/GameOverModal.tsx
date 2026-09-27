@@ -115,10 +115,20 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
           {isWon && onNextLevel && (
             <button
               onClick={onNextLevel}
-              className="w-full py-3.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm sm:text-base flex items-center justify-center gap-2 transition-all shadow-lg shadow-emerald-600/30"
+              disabled={submitState === 'submitting'}
+              className="w-full py-3.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 disabled:cursor-not-allowed text-white font-bold text-sm sm:text-base flex items-center justify-center gap-2 transition-all shadow-lg shadow-emerald-600/30"
             >
-              <Trophy className="w-4 h-4" />
-              <span>Siguiente nivel</span>
+              {submitState === 'submitting' ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Guardando progreso...</span>
+                </>
+              ) : (
+                <>
+                  <Trophy className="w-4 h-4" />
+                  <span>Siguiente nivel</span>
+                </>
+              )}
             </button>
           )}
 

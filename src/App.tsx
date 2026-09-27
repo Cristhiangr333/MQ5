@@ -206,8 +206,13 @@ export default function App({ playerName, courseName, onExit }: AppProps = {}) {
       try {
         const result = await submitRound(currentRegionId, currentGameModeId, finalAnswers);
         setStats((prev) => ({ ...prev, totalXp: prev.totalXp + result.xp_earned }));
-        setSession((prev) => ({ ...prev, isSubmitting: false, xpEarned: result.xp_earned }));
+        // XP se muestra ya mismo (feedback instantáneo), pero isSubmitting sigue en
+        // true hasta que loadProgress() también termine -- si no, "Siguiente nivel"
+        // queda clicable con el desbloqueo del próximo nivel todavía desactualizado
+        // (carrera real, encontrada por un estudiante haciendo clic rápido).
+        setSession((prev) => ({ ...prev, xpEarned: result.xp_earned }));
         await loadProgress();
+        setSession((prev) => ({ ...prev, isSubmitting: false }));
       } catch (err) {
         setSession((prev) => ({
           ...prev,
