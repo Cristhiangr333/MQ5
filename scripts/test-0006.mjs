@@ -22,7 +22,16 @@ function migrationSql(n) {
 async function asUser(uid, fn) {
   await db.query(`select set_config('app.current_uid', $1, false)`, [uid ?? '']);
   await db.query(`select set_config('app.current_is_anon', $1, false)`, ['false']);
-  return fn();
+  // Sin esto, todo corre como el rol por defecto de PGlite (superusuario), que
+  // se salta RLS por completo -- las funciones security definer (submit_round,
+  // etc.) seguirían "pasando" igual porque revisan el dueño por dentro, pero un
+  // `delete`/`select` directo sobre una tabla con RLS no se probaría de verdad.
+  await db.query(`set role authenticated;`);
+  try {
+    return await fn();
+  } finally {
+    await db.query(`reset role;`);
+  }
 }
 
 async function main() {
@@ -141,6 +150,35 @@ async function main() {
     }
   });
   console.log('OK: un estudiante sin rondas no revienta la consulta (todo en cero).\n');
+
+  // --- Borrado permanente de curso (TeacherPanel "Borrar para siempre"):
+  // confirma el cascade real courses -> students -> rounds -> attempts, y
+  // que el docente B no puede borrar el curso del docente A. ---
+  const roundsBefore = (
+    await db.query(`select count(*)::int as n from public.rounds where student_id = $1`, [studentA])
+  ).rows[0].n;
+  if (roundsBefore < 1) throw new Error('FALLO: se esperaba al menos 1 ronda ya jugada por studentA antes de borrar');
+
+  await asUser(teacherB, async () => {
+    // RLS no lanza excepción cuando no hay fila que coincida con `using` --
+    // el DELETE simplemente afecta 0 filas. La prueba real es que el curso
+    // siga existiendo después, no que esto truene.
+    await db.query(`delete from public.courses where id = $1`, [courseA]);
+  });
+  const stillThere = await db.query(`select 1 from public.courses where id = $1`, [courseA]);
+  if (stillThere.rows.length !== 1) throw new Error('FALLO DE SEGURIDAD: el curso del docente A desapareció sin que su dueño lo borrara');
+  console.log('OK: el docente B no puede borrar el curso del docente A (RLS lo bloquea).');
+
+  await asUser(teacherA, async () => {
+    await db.query(`delete from public.courses where id = $1`, [courseA]);
+  });
+  const courseGone = await db.query(`select 1 from public.courses where id = $1`, [courseA]);
+  const studentGone = await db.query(`select 1 from public.students where id = $1`, [studentA]);
+  const roundsGone = await db.query(`select count(*)::int as n from public.rounds where student_id = $1`, [studentA]);
+  if (courseGone.rows.length !== 0) throw new Error('FALLO: el curso siguió existiendo después de borrarlo');
+  if (studentGone.rows.length !== 0) throw new Error('FALLO: el cascade no borró a la estudiante del curso');
+  if (roundsGone.rows[0].n !== 0) throw new Error(`FALLO: el cascade no borró sus ${roundsBefore} ronda(s) jugada(s)`);
+  console.log(`OK: el docente A borró su curso y el cascade se llevó a la estudiante y sus ${roundsBefore} ronda(s) con ella.\n`);
 
   console.log('✅ TODAS LAS PRUEBAS DE 0006 PASARON');
 }

@@ -54,6 +54,7 @@ export default function TeacherPanel() {
   const [editFirstName, setEditFirstName] = useState('');
   const [editLastName, setEditLastName] = useState('');
   const [confirmDeleteStudentId, setConfirmDeleteStudentId] = useState<string | null>(null);
+  const [confirmDeleteCourseId, setConfirmDeleteCourseId] = useState<string | null>(null);
   const [studentRowBusy, setStudentRowBusy] = useState<string | null>(null);
   const [studentRowError, setStudentRowError] = useState<Record<string, string>>({});
 
@@ -155,6 +156,22 @@ export default function TeacherPanel() {
     setCourseRowBusy(null);
     if (error) return setCourseRowError((prev) => ({ ...prev, [course.id]: friendlyError(error) }));
     setCourses((prev) => prev.map((c) => (c.id === course.id ? { ...c, is_active: !c.is_active } : c)));
+  }
+
+  /** Borrado real, en cascada, de un curso archivado: se lleva a sus estudiantes,
+   * rondas y respuestas con él (mismo cascade de la 0001, ya usado para borrar un
+   * solo estudiante -- aquí aplica a todo el curso de una vez). No se puede
+   * deshacer, a diferencia de archivar. Solo se ofrece sobre cursos ya
+   * archivados: primero se archiva (reversible), después -- si de verdad ya no
+   * hace falta el curso -- se borra para siempre. */
+  async function deleteCourse(course: CourseRow) {
+    setCourseRowBusy(course.id);
+    const { error } = await supabase.from('courses').delete().eq('id', course.id);
+    setCourseRowBusy(null);
+    if (error) return setCourseRowError((prev) => ({ ...prev, [course.id]: friendlyError(error) }));
+    setCourses((prev) => prev.filter((c) => c.id !== course.id));
+    setStudents((prev) => prev.filter((s) => s.course_id !== course.id));
+    setConfirmDeleteCourseId(null);
   }
 
   function startEditStudent(s: StudentRow) {
@@ -523,26 +540,71 @@ export default function TeacherPanel() {
                 <ul className="space-y-2 mt-3">
                   {archivedCourses.map((course) => {
                     const list = students.filter((s) => s.course_id === course.id);
+                    const isConfirmingDelete = confirmDeleteCourseId === course.id;
+                    const totalXp = list.reduce(
+                      (sum, s) => sum + (progressByCourse[course.id]?.rows.find((r) => r.student_id === s.id)?.total_xp ?? 0),
+                      0,
+                    );
                     return (
                       <li key={course.id}>
                         <Card className="opacity-70">
-                          <div className="flex flex-wrap items-center justify-between gap-3">
-                            <div>
-                              <h3 className="text-base font-extrabold font-['Baloo_2']">{course.name}</h3>
-                              <p className="text-xs text-slate-400 mt-0.5">
-                                {list.length === 1 ? '1 estudiante' : `${list.length} estudiantes`} · archivado
+                          {isConfirmingDelete ? (
+                            <div className="flex flex-wrap items-center justify-between gap-2 bg-red-950/40 border border-red-800/60 rounded-lg px-3 py-2 -mx-1">
+                              <p className="text-xs text-red-200">
+                                ¿Borrar <strong>{course.name}</strong> para siempre? Se pierde
+                                {list.length === 0
+                                  ? ' el curso'
+                                  : ` a ${list.length === 1 ? '1 estudiante' : `los ${list.length} estudiantes`} (${totalXp} XP en total)`}
+                                . A diferencia de archivar, esto no se puede deshacer.
                               </p>
-                              {courseRowError[course.id] && <p className="text-xs text-red-400 mt-1">{courseRowError[course.id]}</p>}
+                              <div className="flex items-center gap-2 shrink-0">
+                                <button
+                                  onClick={() => void deleteCourse(course)}
+                                  disabled={courseRowBusy === course.id}
+                                  className="text-xs font-bold bg-red-700 hover:bg-red-600 text-white rounded-lg px-3 py-1.5 flex items-center gap-1.5"
+                                >
+                                  {courseRowBusy === course.id ? <Spinner className="w-3.5 h-3.5" /> : null}
+                                  Sí, borrar para siempre
+                                </button>
+                                <button
+                                  onClick={() => setConfirmDeleteCourseId(null)}
+                                  className="text-xs font-bold text-slate-300 hover:text-white px-2 py-1.5"
+                                >
+                                  Cancelar
+                                </button>
+                              </div>
                             </div>
-                            <button
-                              onClick={() => void toggleCourseActive(course)}
-                              disabled={courseRowBusy === course.id}
-                              className="text-xs font-bold text-emerald-300 hover:text-emerald-200 bg-slate-800/70 hover:bg-slate-700 rounded-lg px-3 py-2 flex items-center gap-1.5"
-                            >
-                              {courseRowBusy === course.id ? <Spinner className="w-3.5 h-3.5" /> : <ArchiveRestore className="w-3.5 h-3.5" />}
-                              Reactivar
-                            </button>
-                          </div>
+                          ) : (
+                            <div className="flex flex-wrap items-center justify-between gap-3">
+                              <div>
+                                <h3 className="text-base font-extrabold font-['Baloo_2']">{course.name}</h3>
+                                <p className="text-xs text-slate-400 mt-0.5">
+                                  {list.length === 1 ? '1 estudiante' : `${list.length} estudiantes`} · archivado
+                                </p>
+                                {courseRowError[course.id] && <p className="text-xs text-red-400 mt-1">{courseRowError[course.id]}</p>}
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={() => void toggleCourseActive(course)}
+                                  disabled={courseRowBusy === course.id}
+                                  className="text-xs font-bold text-emerald-300 hover:text-emerald-200 bg-slate-800/70 hover:bg-slate-700 rounded-lg px-3 py-2 flex items-center gap-1.5"
+                                >
+                                  {courseRowBusy === course.id ? <Spinner className="w-3.5 h-3.5" /> : <ArchiveRestore className="w-3.5 h-3.5" />}
+                                  Reactivar
+                                </button>
+                                <button
+                                  onClick={() => setConfirmDeleteCourseId(course.id)}
+                                  disabled={courseRowBusy === course.id}
+                                  title="Borrar para siempre (no se puede deshacer)"
+                                  aria-label={`Borrar ${course.name} para siempre`}
+                                  className="text-xs font-bold text-red-300 hover:text-red-200 bg-slate-800/70 hover:bg-slate-700 rounded-lg px-3 py-2 flex items-center gap-1.5"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                  Borrar
+                                </button>
+                              </div>
+                            </div>
+                          )}
                         </Card>
                       </li>
                     );
