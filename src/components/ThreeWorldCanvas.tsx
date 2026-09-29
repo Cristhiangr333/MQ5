@@ -3710,7 +3710,41 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
 
   // Handle Win/Loss Animations in 3D
   useEffect(() => {
-    if (!gameWon && !gameOver) return;
+    if (!gameWon && !gameOver) {
+      // Nivel nuevo (o reiniciado): el canvas 3D no se vuelve a montar entre
+      // niveles -- solo cambian las props -- así que sin este reset, el
+      // confeti y las animaciones de victoria/derrota de la ronda anterior se
+      // quedaban pegados en el siguiente nivel (puente ya "construido",
+      // puertas ya abiertas, confeti cayendo desde el segundo 0). Deja cada
+      // mesh exactamente en el mismo estado que tenía al crearse, arriba en
+      // este mismo archivo.
+      if (finishRibbonRef.current) finishRibbonRef.current.visible = true;
+      if (finishConfettiGroupRef.current) finishConfettiGroupRef.current.visible = false;
+      if (enemyFighterRef.current) enemyFighterRef.current.visible = true;
+      if (golemCrumbleGroupRef.current) golemCrumbleGroupRef.current.visible = false;
+      if (heroVictoryAuraRef.current) {
+        (heroVictoryAuraRef.current.material as THREE.MeshBasicMaterial).opacity = 0;
+      }
+      if (shopCheerCoinsRef.current) shopCheerCoinsRef.current.visible = false;
+      if (shopCelebrationBagRef.current) shopCelebrationBagRef.current.visible = false;
+      if (bridgeVictoryFlagRef.current) bridgeVictoryFlagRef.current.visible = false;
+      if (castleSparklesRef.current) castleSparklesRef.current.visible = false;
+      if (castleDoorLeftRef.current) castleDoorLeftRef.current.rotation.y = 0;
+      if (castleDoorRightRef.current) castleDoorRightRef.current.rotation.y = 0;
+      if (castleDetectiveRef.current) castleDetectiveRef.current.position.z = 2.2;
+      if (runnerSweatRef.current) runnerSweatRef.current.visible = false;
+      if (runnerGroupRef.current) runnerGroupRef.current.rotation.x = 0;
+      if (heroDizzyStarsRef.current) heroDizzyStarsRef.current.visible = false;
+      if (heroFighterRef.current) heroFighterRef.current.rotation.z = 0;
+      if (shopClosedSignRef.current) shopClosedSignRef.current.visible = false;
+      if (bridgeBrokenPlankRef.current) bridgeBrokenPlankRef.current.visible = false;
+      if (castleQuestionMarksRef.current) castleQuestionMarksRef.current.visible = false;
+      if (castlePortcullisRef.current) {
+        castlePortcullisRef.current.visible = false;
+        castlePortcullisRef.current.position.y = 5.8;
+      }
+      return;
+    }
 
     const startTime = performance.now();
 
