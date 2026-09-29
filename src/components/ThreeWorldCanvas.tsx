@@ -745,6 +745,9 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
   const castlePortcullisRef = useRef<THREE.Mesh | null>(null);
   const castleSparklesRef = useRef<THREE.Group | null>(null);
   const castleQuestionMarksRef = useRef<THREE.Group | null>(null);
+  // Haz de luz dorado tipo "bóveda" que sale por la puerta del castillo al
+  // ganar el nivel completo de Detective (oculto hasta la victoria).
+  const castleGateGlowRef = useRef<THREE.Mesh | null>(null);
 
   // In-Scene 3D Dynamic Particle Systems
   const runnerDustGroupRef = useRef<THREE.Group | null>(null);
@@ -3093,6 +3096,22 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
         beam.rotation.z = -Math.PI / 6;
         rootGroup.add(beam);
         castleBeamMeshRef.current = beam;
+
+        // Haz de luz dorado tipo "bóveda" que sale por la puerta al ganar el
+        // nivel completo (oculto hasta la secuencia de victoria, más abajo).
+        const gateGlowMat = new THREE.MeshBasicMaterial({
+          color: 0xfef08a,
+          transparent: true,
+          opacity: 0.55,
+          side: THREE.DoubleSide,
+          depthWrite: false,
+        });
+        const gateGlow = new THREE.Mesh(new THREE.ConeGeometry(2.4, 5.2, 16, 1, true), gateGlowMat);
+        gateGlow.rotation.x = -Math.PI / 2;
+        gateGlow.position.set(0, 1.8, -1.2);
+        gateGlow.visible = false;
+        rootGroup.add(gateGlow);
+        castleGateGlowRef.current = gateGlow;
       }
     }
 
@@ -3850,26 +3869,58 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
           requestAnimationFrame(anim);
         }
       } else if (gameMode === 'detective') {
-        // All doors swing fully open, treasure sparkles float up, detective steps forward
+        // VICTORIA DEL CASTILLO: las barras del candado se deslizan y
+        // desaparecen, las puertas se abren de par en par, sale el haz de
+        // luz dorado de la bóveda y el detective salta triunfante hacia la
+        // entrada con su lupa en alto.
         const doorLeft = castleDoorLeftRef.current;
         const doorRight = castleDoorRightRef.current;
         const det = castleDetectiveRef.current;
+
+        // Deslizar y ocultar todas las barras del candado
+        castleLockBarsRef.current.forEach((bolt) => {
+          bolt.position.x = 4.0;
+          bolt.visible = false;
+        });
+
         if (castleSparklesRef.current) castleSparklesRef.current.visible = true;
+        if (castleGateGlowRef.current) castleGateGlowRef.current.visible = true;
         if (finishConfettiGroupRef.current) finishConfettiGroupRef.current.visible = true;
-        targetCamPos.current.set(0, 3.4, 4.5);
-        targetCamLookAt.current.set(0, 1.5, -1.8);
+
+        targetCamPos.current.set(0, 2.9, 4.6);
+        targetCamLookAt.current.set(0, 1.6, -1.2);
+
+        const startX = det ? det.position.x : -1.8;
+        const startZ = det ? det.position.z : 2.2;
+        const targetX = 0;
+        const targetZ = 0.2;
 
         const anim = (time: number) => {
-          const elapsed = (time - startTime) / 1000;
+          const elapsed = (time - startTime) / 1400;
           if (elapsed < 1.0) {
-            if (doorLeft) doorLeft.rotation.y = -THREE.MathUtils.lerp(0, 1.4, elapsed);
-            if (doorRight) doorRight.rotation.y = THREE.MathUtils.lerp(0, 1.4, elapsed);
-            if (det) det.position.z = THREE.MathUtils.lerp(2.2, 0.5, elapsed);
+            // Puertas de roble macizo abriéndose con easing cinematográfico
+            const doorOpenEase = THREE.MathUtils.smoothstep(elapsed, 0, 0.85);
+            if (doorLeft) doorLeft.rotation.y = -THREE.MathUtils.lerp(0, 1.65, doorOpenEase);
+            if (doorRight) doorRight.rotation.y = THREE.MathUtils.lerp(0, 1.65, doorOpenEase);
+
+            // Salto triunfal del detective hacia la entrada dorada
+            if (det) {
+              const jumpProgress = Math.min(1.0, elapsed * 1.15);
+              det.position.x = THREE.MathUtils.lerp(startX, targetX, jumpProgress);
+              det.position.z = THREE.MathUtils.lerp(startZ, targetZ, jumpProgress);
+              det.position.y = 0.3 + Math.sin(jumpProgress * Math.PI) * 1.7;
+              det.rotation.y = THREE.MathUtils.lerp(Math.PI / 4, 0, jumpProgress) + Math.sin(jumpProgress * Math.PI * 2) * 0.35;
+            }
             requestAnimationFrame(anim);
           } else {
-            if (doorLeft) doorLeft.rotation.y = -1.4;
-            if (doorRight) doorRight.rotation.y = 1.4;
-            if (det) det.position.z = 0.5;
+            if (doorLeft) doorLeft.rotation.y = -1.65;
+            if (doorRight) doorRight.rotation.y = 1.65;
+            if (det) {
+              det.position.x = targetX;
+              det.position.z = targetZ;
+              det.position.y = 0.35;
+              det.rotation.y = 0;
+            }
           }
         };
         requestAnimationFrame(anim);
@@ -4374,6 +4425,12 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
 
       if (heroDizzyStarsRef.current && heroDizzyStarsRef.current.visible) {
         heroDizzyStarsRef.current.rotation.y = time * 4.5;
+      }
+
+      if (castleGateGlowRef.current && castleGateGlowRef.current.visible) {
+        castleGateGlowRef.current.rotation.z = time * 0.4;
+        const beamPulse = 0.48 + Math.sin(time * 5.5) * 0.16;
+        (castleGateGlowRef.current.material as THREE.MeshBasicMaterial).opacity = beamPulse;
       }
 
       if (heroVictoryAuraRef.current && heroVictoryAuraRef.current.visible) {
