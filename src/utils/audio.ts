@@ -60,7 +60,9 @@ export function playTone(
   }
 }
 
-export function playSfx(name: 'correct' | 'wrong' | 'combo' | 'hop' | 'attack' | 'hit' | 'build' | 'victory' | 'gameover' | 'click') {
+export function playSfx(
+  name: 'correct' | 'wrong' | 'combo' | 'hop' | 'attack' | 'hit' | 'build' | 'victory' | 'gameover' | 'click' | 'unlock'
+) {
   if (isMuted) return;
 
   switch (name) {
@@ -116,5 +118,29 @@ export function playSfx(name: 'correct' | 'wrong' | 'combo' | 'hop' | 'attack' |
     case 'click':
       playTone(700, 0.03, 'sine', 0, 0.08);
       break;
+
+    case 'unlock': {
+      // Fanfarria de desbloqueo de región: arpegio ascendente + acorde final
+      const cosmicNotes = [
+        { f: 523.25, t: 0.0, d: 0.2 }, // C5
+        { f: 659.25, t: 0.12, d: 0.2 }, // E5
+        { f: 783.99, t: 0.24, d: 0.2 }, // G5
+        { f: 987.77, t: 0.36, d: 0.22 }, // B5
+        { f: 1046.5, t: 0.48, d: 0.24 }, // C6
+        { f: 1318.5, t: 0.62, d: 0.28 }, // E6
+        { f: 1567.98, t: 0.76, d: 0.35 }, // G6
+        { f: 2093.0, t: 0.92, d: 0.55 }, // C7
+      ];
+      cosmicNotes.forEach((n) => {
+        playTone(n.f, n.d, 'triangle', n.t, 0.22);
+        playTone(n.f * 1.5, n.d * 0.7, 'sine', n.t + 0.03, 0.14);
+      });
+      setTimeout(() => {
+        [523.25, 659.25, 783.99, 1046.5, 1567.98].forEach((f) => {
+          playTone(f, 0.85, 'sine', 0, 0.12);
+        });
+      }, 900);
+      break;
+    }
   }
 }

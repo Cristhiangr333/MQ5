@@ -36,6 +36,165 @@ interface ThreeWorldCanvasProps {
   gameOver?: boolean;
   onSelectRegion?: (regionId: string) => void;
   onWebGLError?: () => void;
+  /** Id de la región recién desbloqueada mientras dura la celebración 3D (null = ninguna). */
+  unlockingRegionId?: string | null;
+}
+
+// ==========================================
+// FX 3D "MARIO GALAXY" DE REGIÓN DESBLOQUEADA
+// ==========================================
+// Porta 1:1 el FX del prototipo (candado dorado que retumba y explota en
+// fragmentos, haz de luz, anillos, estrellas orbitando, flecha flotante).
+interface GalaxyUnlockFXData {
+  group: THREE.Group;
+  beamMesh: THREE.Mesh;
+  ringMesh: THREE.Mesh;
+  lockGroup: THREE.Group;
+  fragmentsGroup: THREE.Group;
+  fragments: { mesh: THREE.Mesh; vx: number; vy: number; vz: number; rotSpd: number }[];
+  starsGroup: THREE.Group;
+  starMeshes: THREE.Mesh[];
+  pointerGroup: THREE.Group;
+  targetRegionId: string;
+}
+
+function createMarioGalaxyUnlockFX(regionPos: [number, number, number], themeColor = '#f59e0b'): GalaxyUnlockFXData {
+  const group = new THREE.Group();
+  group.position.set(...regionPos);
+
+  // 1. Haz de luz celestial descendiendo
+  const beamGeo = new THREE.CylinderGeometry(0.9, 2.0, 36, 24, 1, true);
+  const beamMat = new THREE.MeshBasicMaterial({
+    color: 0xfef08a,
+    transparent: true,
+    opacity: 0.55,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+  });
+  const beamMesh = new THREE.Mesh(beamGeo, beamMat);
+  beamMesh.position.y = 16;
+  group.add(beamMesh);
+
+  // 2. Anillos de choque pulsantes sobre la isla
+  const ringGeo = new THREE.RingGeometry(2.2, 3.2, 32);
+  const ringMat = new THREE.MeshBasicMaterial({
+    color: 0xfbbf24,
+    transparent: true,
+    opacity: 0.8,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+  });
+  const ringMesh = new THREE.Mesh(ringGeo, ringMat);
+  ringMesh.rotation.x = Math.PI / 2;
+  ringMesh.position.y = 0.55;
+  group.add(ringMesh);
+
+  // 3. Candado 3D dorado
+  const lockGroup = new THREE.Group();
+  lockGroup.position.set(0, 2.5, 0);
+
+  const lockBodyMat = new THREE.MeshStandardMaterial({
+    color: 0xf59e0b,
+    metalness: 0.85,
+    roughness: 0.25,
+    emissive: 0xd97706,
+    emissiveIntensity: 0.45,
+  });
+  const lockBody = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.95, 0.45), lockBodyMat);
+  lockGroup.add(lockBody);
+
+  const shackleGeo = new THREE.TorusGeometry(0.48, 0.12, 12, 24, Math.PI);
+  const shackleMat = new THREE.MeshStandardMaterial({
+    color: 0xe2e8f0,
+    metalness: 0.92,
+    roughness: 0.18,
+  });
+  const shackle = new THREE.Mesh(shackleGeo, shackleMat);
+  shackle.position.y = 0.48;
+  lockGroup.add(shackle);
+
+  const keyhole = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.12, 0.12, 0.05, 12),
+    new THREE.MeshBasicMaterial({ color: 0x1e293b })
+  );
+  keyhole.rotation.x = Math.PI / 2;
+  keyhole.position.z = 0.24;
+  lockGroup.add(keyhole);
+
+  group.add(lockGroup);
+
+  // 4. Fragmentos explosivos (cristales dorados)
+  const fragmentCount = 36;
+  const fragGeo = new THREE.DodecahedronGeometry(0.16, 0);
+  const fragMat = new THREE.MeshStandardMaterial({
+    color: 0xfef08a,
+    emissive: 0xf59e0b,
+    emissiveIntensity: 0.8,
+    roughness: 0.2,
+  });
+  const fragments: { mesh: THREE.Mesh; vx: number; vy: number; vz: number; rotSpd: number }[] = [];
+  const fragmentsGroup = new THREE.Group();
+  fragmentsGroup.position.set(0, 2.5, 0);
+  fragmentsGroup.visible = false;
+
+  for (let i = 0; i < fragmentCount; i++) {
+    const frag = new THREE.Mesh(fragGeo, fragMat);
+    const theta = Math.random() * Math.PI * 2;
+    const phi = (Math.random() - 0.5) * Math.PI;
+    const speed = 2.8 + Math.random() * 4.2;
+    const vx = Math.cos(theta) * Math.cos(phi) * speed;
+    const vy = Math.abs(Math.sin(phi)) * speed + 1.8;
+    const vz = Math.sin(theta) * Math.cos(phi) * speed;
+    fragmentsGroup.add(frag);
+    fragments.push({ mesh: frag, vx, vy, vz, rotSpd: (Math.random() - 0.5) * 8 });
+  }
+  group.add(fragmentsGroup);
+
+  // 5. Estrellas orbitando la isla
+  const starsGroup = new THREE.Group();
+  starsGroup.position.set(0, 1.2, 0);
+  const starGeo = new THREE.OctahedronGeometry(0.24, 0);
+  const starMat = new THREE.MeshStandardMaterial({
+    color: 0xfef08a,
+    emissive: 0xfbbf24,
+    emissiveIntensity: 0.9,
+    roughness: 0.1,
+  });
+  const starMeshes: THREE.Mesh[] = [];
+  for (let s = 0; s < 5; s++) {
+    const star = new THREE.Mesh(starGeo, starMat);
+    starsGroup.add(star);
+    starMeshes.push(star);
+  }
+  group.add(starsGroup);
+
+  // 6. Flecha/puntero flotante indicando dónde tocar
+  const pointerGroup = new THREE.Group();
+  pointerGroup.position.set(0, 3.8, 0);
+  const pointerCone = new THREE.Mesh(
+    new THREE.ConeGeometry(0.35, 0.7, 16),
+    new THREE.MeshStandardMaterial({
+      color: 0x38bdf8,
+      emissive: 0x0284c7,
+      emissiveIntensity: 0.8,
+    })
+  );
+  pointerCone.rotation.x = Math.PI; // apunta hacia abajo
+  pointerGroup.add(pointerCone);
+  group.add(pointerGroup);
+
+  return {
+    group,
+    beamMesh,
+    ringMesh,
+    lockGroup,
+    fragmentsGroup,
+    fragments,
+    starsGroup,
+    starMeshes,
+    pointerGroup,
+    targetRegionId: '',
+  };
 }
 
 // Procedural realistic gradient sky dome (vibrant daylight blue to soft peach/gold dawn horizon)
@@ -641,6 +800,7 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
   gameOver = false,
   onSelectRegion,
   onWebGLError,
+  unlockingRegionId,
 }) => {
   const mountRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
@@ -651,6 +811,12 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
   // Keep onSelectRegion in ref so re-renders don't teardown WebGL
   const onSelectRegionRef = useRef(onSelectRegion);
   onSelectRegionRef.current = onSelectRegion;
+
+  // FX 3D "Mario Galaxy" de región desbloqueada
+  const unlockingRegionIdRef = useRef<string | null | undefined>(unlockingRegionId);
+  unlockingRegionIdRef.current = unlockingRegionId;
+  const galaxyUnlockFXRef = useRef<GalaxyUnlockFXData | null>(null);
+  const galaxyUnlockStartTimeRef = useRef<number>(0);
   const isCorrectRef = useRef(isCorrect);
   isCorrectRef.current = isCorrect;
   const gameWonRef = useRef(gameWon);
@@ -1002,6 +1168,14 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
 
     const handlePointerUp = (e: MouseEvent | TouchEvent) => {
       isDragging.current = false;
+
+      // Mientras la celebración de región desbloqueada está activa, tocar
+      // en cualquier parte del mapa lanza directo esa región.
+      if (unlockingRegionIdRef.current && onSelectRegionRef.current) {
+        onSelectRegionRef.current(unlockingRegionIdRef.current);
+        return;
+      }
+
       // If tap/click was stationary, detect island click
       const { x, y } = pointFromEvent(e);
       const rect = renderer.domElement.getBoundingClientRect();
@@ -3122,6 +3296,37 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [viewMode, currentRegionId, gameMode]);
 
+  // Montar/desmontar el FX 3D "Mario Galaxy" cuando entra o sale la
+  // celebración de región desbloqueada. Efecto liviano y aparte del de
+  // arriba: solo crea/destruye este grupo puntual, no reconstruye la escena.
+  useEffect(() => {
+    if (!sceneRef.current) return;
+
+    if (galaxyUnlockFXRef.current) {
+      sceneRef.current.remove(galaxyUnlockFXRef.current.group);
+      disposeObjectHierarchy(galaxyUnlockFXRef.current.group);
+      galaxyUnlockFXRef.current = null;
+    }
+
+    if (viewMode === 'map' && unlockingRegionId) {
+      const targetRegion = REGIONS.find((r) => r.id === unlockingRegionId);
+      if (targetRegion) {
+        const fx = createMarioGalaxyUnlockFX(targetRegion.islandPosition, targetRegion.themeColor);
+        sceneRef.current.add(fx.group);
+        galaxyUnlockFXRef.current = { ...fx, targetRegionId: unlockingRegionId };
+        galaxyUnlockStartTimeRef.current = performance.now();
+      }
+    }
+
+    return () => {
+      if (galaxyUnlockFXRef.current && sceneRef.current) {
+        sceneRef.current.remove(galaxyUnlockFXRef.current.group);
+        disposeObjectHierarchy(galaxyUnlockFXRef.current.group);
+        galaxyUnlockFXRef.current = null;
+      }
+    };
+  }, [viewMode, unlockingRegionId]);
+
   // Update Dynamic Bridge Segments and advance walker when bridgeBuiltSegments changes
   useEffect(() => {
     if (gameMode !== 'bridge' || !bridgeSegmentsGroupRef.current) return;
@@ -4007,17 +4212,88 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
       // Smooth camera motion
       if (cameraRef.current) {
         if (viewMode === 'map') {
-          // Orbiting camera around center based on mapRotationAngle with spacious panoramic orbit
-          const orbitRadius = 24;
-          const currentAngle = mapRotationAngle.current + time * 0.035;
-          const cx = Math.sin(currentAngle) * orbitRadius;
-          const cz = Math.cos(currentAngle) * orbitRadius;
-          targetCamPos.current.set(cx, 16, cz);
+          if (unlockingRegionIdRef.current) {
+            // Zoom cinematográfico "Mario Galaxy": acercamiento suave a la
+            // isla de la región recién desbloqueada, en vez de la órbita.
+            const targetDef = REGIONS.find((r) => r.id === unlockingRegionIdRef.current);
+            if (targetDef) {
+              const [rx, ry, rz] = targetDef.islandPosition;
+              targetCamPos.current.set(rx + 3.8, ry + 3.2, rz + 5.2);
+              targetCamLookAt.current.set(rx, ry + 0.8, rz);
+            }
+          } else {
+            // Orbiting camera around center based on mapRotationAngle with spacious panoramic orbit
+            const orbitRadius = 24;
+            const currentAngle = mapRotationAngle.current + time * 0.035;
+            const cx = Math.sin(currentAngle) * orbitRadius;
+            const cz = Math.cos(currentAngle) * orbitRadius;
+            targetCamPos.current.set(cx, 16, cz);
+          }
         }
 
-        cameraRef.current.position.lerp(targetCamPos.current, 0.06);
-        currentCamLookAt.current.lerp(targetCamLookAt.current, 0.08);
+        const camLerp = unlockingRegionIdRef.current ? 0.045 : 0.06;
+        const lookLerp = unlockingRegionIdRef.current ? 0.06 : 0.08;
+        cameraRef.current.position.lerp(targetCamPos.current, camLerp);
+        currentCamLookAt.current.lerp(targetCamLookAt.current, lookLerp);
         cameraRef.current.lookAt(currentCamLookAt.current);
+      }
+
+      // Animación cinemática del FX de región desbloqueada
+      if (galaxyUnlockFXRef.current) {
+        const fx = galaxyUnlockFXRef.current;
+        const elapsed = (performance.now() - galaxyUnlockStartTimeRef.current) / 1000;
+
+        // Rotación y pulso del haz de luz
+        fx.beamMesh.rotation.y = time * 0.8;
+        if (fx.beamMesh.material && 'opacity' in fx.beamMesh.material) {
+          (fx.beamMesh.material as THREE.MeshBasicMaterial).opacity = 0.45 + Math.sin(time * 5) * 0.2;
+        }
+
+        // Anillo de choque expandiéndose
+        const ringProgress = (elapsed * 1.2) % 1;
+        const ringScale = 1 + ringProgress * 2.2;
+        fx.ringMesh.scale.set(ringScale, ringScale, ringScale);
+        if (fx.ringMesh.material && 'opacity' in fx.ringMesh.material) {
+          (fx.ringMesh.material as THREE.MeshBasicMaterial).opacity = (1 - ringProgress) * 0.8;
+        }
+
+        // Candado retumbando y luego explotando en fragmentos
+        if (elapsed < 1.1) {
+          fx.lockGroup.visible = true;
+          fx.fragmentsGroup.visible = false;
+          fx.lockGroup.position.x = (Math.random() - 0.5) * 0.08;
+          fx.lockGroup.position.z = (Math.random() - 0.5) * 0.08;
+          fx.lockGroup.position.y = 2.5 + Math.sin(time * 12) * 0.05;
+          fx.lockGroup.rotation.y = Math.sin(time * 15) * 0.12;
+        } else {
+          if (fx.lockGroup.visible) {
+            fx.lockGroup.visible = false;
+            fx.fragmentsGroup.visible = true;
+          }
+          const fragTime = elapsed - 1.1;
+          fx.fragments.forEach((f) => {
+            f.mesh.position.x = f.vx * fragTime * 0.6;
+            f.mesh.position.y = f.vy * fragTime * 0.6 - 0.5 * 9.8 * (fragTime * 0.6) ** 2;
+            f.mesh.position.z = f.vz * fragTime * 0.6;
+            f.mesh.rotation.x += f.rotSpd * 0.02;
+            f.mesh.rotation.y += f.rotSpd * 0.03;
+          });
+        }
+
+        // Estrellas orbitando la isla
+        fx.starMeshes.forEach((star, sIdx) => {
+          const starAngle = time * 1.8 + (sIdx * Math.PI * 2) / 5;
+          const r = 2.8;
+          star.position.x = Math.cos(starAngle) * r;
+          star.position.z = Math.sin(starAngle) * r;
+          star.position.y = Math.sin(time * 3 + sIdx) * 0.3;
+          star.rotation.x += 0.03;
+          star.rotation.y += 0.05;
+        });
+
+        // Flecha flotante indicando dónde tocar
+        fx.pointerGroup.position.y = 3.6 + Math.sin(time * 4) * 0.25;
+        fx.pointerGroup.rotation.y = time * 2;
       }
 
       // Gentle cloud and sky dome drifting
