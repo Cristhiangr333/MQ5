@@ -153,6 +153,19 @@ export default function App({ playerName, courseName, onExit }: AppProps = {}) {
 
   // Carga las preguntas reales del nivel y arranca la ronda
   const initLevelSession = useCallback(async (regionId: string, gameModeId: GameMode) => {
+    // currentRegionId/gameMode/viewMode cambian YA -- eso es lo que dispara
+    // la reconstrucción completa de la escena 3D (ver ThreeWorldCanvas). Esa
+    // reconstrucción lee heroHp/enemyHp/bridgeBuiltSegments/gameWon/gameOver
+    // de `session` en ese mismo instante para armar la posición inicial de
+    // personajes y la cámara. Si dejamos `session` con los valores de la
+    // ronda ANTERIOR hasta que responda Supabase (como estaba antes), la
+    // escena se arma mal desde el arranque: personaje del puente en la
+    // posición vieja, confeti/cámara de victoria si el nivel anterior se
+    // había ganado, personajes de batalla con la vida vieja -- y como esa
+    // reconstrucción ocurre una sola vez, queda así hasta que algo vuelva a
+    // cambiar region/modo/viewMode (por eso "salir y volver a entrar" lo
+    // arreglaba). Por eso limpiamos session ya mismo, sin esperar la red.
+    setSession(emptySession(regionId, gameModeId));
     setCurrentRegionId(regionId);
     setCurrentGameModeId(gameModeId);
     setViewMode('game');
@@ -169,14 +182,18 @@ export default function App({ playerName, courseName, onExit }: AppProps = {}) {
       }
       const maxTime = config.secondsPerQuestion * 1000;
       const isFirstTimeForThisMode = !loadSeenTutorials().has(gameModeId);
-      setSession({
-        ...emptySession(regionId, gameModeId),
+      // Ya no se pisa la sesión entera: solo se agregan los campos que
+      // dependen de la respuesta del servidor, para no perder el reseteo
+      // inmediato de arriba si el jugador alcanzó a interactuar mientras
+      // tanto (poco probable, pero gratis de proteger).
+      setSession((prev) => ({
+        ...prev,
         totalQuestions: questions.length,
         questions,
         timeLeft: maxTime,
         maxTime,
         isTimerActive: !isFirstTimeForThisMode,
-      });
+      }));
       setTutorialGameMode(isFirstTimeForThisMode ? gameModeId : null);
       setStats((prev) => ({ ...prev, lives: config.lives, maxLives: config.lives, combo: 0, score: 0 }));
     } catch (err) {
