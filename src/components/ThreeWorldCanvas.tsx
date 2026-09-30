@@ -2,6 +2,37 @@ import React, { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { REGIONS } from '../data/regionsData';
 import { GameMode } from '../types';
+
+/** Cómo se ve un mesh "en reposo": lo que hace falta para volver ahí después
+ * de una animación de victoria/derrota, sin conocer de antemano qué mesh es
+ * ni qué animación le van a aplicar. */
+interface FinishMeshSnapshot {
+  visible: boolean;
+  position: THREE.Vector3;
+  rotation: THREE.Euler;
+  opacity: number | null;
+}
+
+function snapshotFinishMesh(obj: THREE.Object3D): FinishMeshSnapshot {
+  const mat = 'material' in obj ? (obj as THREE.Mesh).material : undefined;
+  const opacity = mat && !Array.isArray(mat) && 'opacity' in mat ? (mat as THREE.MeshBasicMaterial).opacity : null;
+  return {
+    visible: obj.visible,
+    position: obj.position.clone(),
+    rotation: obj.rotation.clone(),
+    opacity,
+  };
+}
+
+function restoreFinishMesh(obj: THREE.Object3D, snap: FinishMeshSnapshot) {
+  obj.visible = snap.visible;
+  obj.position.copy(snap.position);
+  obj.rotation.copy(snap.rotation);
+  if (snap.opacity !== null) {
+    const mat = 'material' in obj ? (obj as THREE.Mesh).material : undefined;
+    if (mat && !Array.isArray(mat) && 'opacity' in mat) (mat as THREE.MeshBasicMaterial).opacity = snap.opacity;
+  }
+}
 import {
   createRunnerCharacter,
   createKnightHeroCharacter,
@@ -914,6 +945,14 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
   // Haz de luz dorado tipo "bóveda" que sale por la puerta del castillo al
   // ganar el nivel completo de Detective (oculto hasta la victoria).
   const castleGateGlowRef = useRef<THREE.Mesh | null>(null);
+
+  // "Foto" de cómo se ve cada mesh de victoria/derrota en reposo (posición,
+  // rotación, visibilidad, opacidad), tomada una sola vez apenas se monta la
+  // escena -- antes de cualquier animación de victoria/derrota. Se usa para
+  // volver exactamente ahí al empezar un nivel nuevo, sin tener que hardcodear
+  // valores a mano ni acordarse de actualizar una lista cada vez que se agregue
+  // una animación nueva (ver ADR-014/ADR-015 en docs/DECISIONS.md).
+  const finishMeshSnapshotsRef = useRef<Map<THREE.Object3D, FinishMeshSnapshot> | null>(null);
 
   // In-Scene 3D Dynamic Particle Systems
   const runnerDustGroupRef = useRef<THREE.Group | null>(null);
@@ -3974,7 +4013,58 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
 
   // Handle Win/Loss Animations in 3D
   useEffect(() => {
-    if (!gameWon && !gameOver) return;
+    if (!gameWon && !gameOver) {
+      // Nivel nuevo (o reiniciado): el canvas 3D no se vuelve a montar entre
+      // niveles -- solo cambian las props -- así que sin este reset, el
+      // confeti y las animaciones de victoria/derrota de la ronda anterior se
+      // quedaban pegadas en el siguiente nivel (puente ya "construido",
+      // puertas ya abiertas, confeti cayendo desde el segundo 0).
+      const finishMeshes: (THREE.Object3D | null)[] = [
+        finishRibbonRef.current,
+        finishConfettiGroupRef.current,
+        enemyFighterRef.current,
+        golemCrumbleGroupRef.current,
+        heroVictoryAuraRef.current,
+        shopCheerCoinsRef.current,
+        shopCelebrationBagRef.current,
+        bridgeVictoryFlagRef.current,
+        castleSparklesRef.current,
+        castleGateGlowRef.current,
+        castleDoorLeftRef.current,
+        castleDoorRightRef.current,
+        castleDetectiveRef.current,
+        runnerSweatRef.current,
+        runnerGroupRef.current,
+        heroDizzyStarsRef.current,
+        heroFighterRef.current,
+        shopClosedSignRef.current,
+        bridgeBrokenPlankRef.current,
+        castleQuestionMarksRef.current,
+        castlePortcullisRef.current,
+        ...castleLockBarsRef.current,
+      ];
+
+      if (!finishMeshSnapshotsRef.current) {
+        // Primera vez que corre este efecto -- es el montaje inicial, antes
+        // de cualquier victoria/derrota, así que todo está todavía en su
+        // posición de creación. Se guarda tal cual, una sola vez, para poder
+        // volver exactamente ahí después de cada nivel sin tener que conocer
+        // (ni mantener actualizados) los valores numéricos de cada mesh.
+        const snapshots = new Map<THREE.Object3D, FinishMeshSnapshot>();
+        finishMeshes.forEach((obj) => {
+          if (obj) snapshots.set(obj, snapshotFinishMesh(obj));
+        });
+        finishMeshSnapshotsRef.current = snapshots;
+        return;
+      }
+
+      finishMeshes.forEach((obj) => {
+        if (!obj) return;
+        const snap = finishMeshSnapshotsRef.current!.get(obj);
+        if (snap) restoreFinishMesh(obj, snap);
+      });
+      return;
+    }
 
     const startTime = performance.now();
 
