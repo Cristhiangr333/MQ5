@@ -552,7 +552,16 @@ export default function App({ playerName, courseName, onExit }: AppProps = {}) {
             </p>
             <div className="mt-4 flex flex-wrap justify-center gap-3">
               <button
-                onClick={() => setViewMode('game')}
+                onClick={() => {
+                  // Antes solo cambiaba viewMode a 'game' sin pedir las
+                  // preguntas: si el estudiante entraba nuevo a la app y
+                  // tocaba este botón antes de haber cargado un nivel por
+                  // otra vía (clic en isla / tira de niveles), `session`
+                  // seguía vacío y no aparecía ninguna pregunta. Ahora
+                  // siempre carga (o recarga) el nivel real al pulsar.
+                  playSfx('click');
+                  void initLevelSession(currentRegionId, currentGameModeId);
+                }}
                 className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 font-bold text-sm text-white flex items-center gap-2 shadow-lg shadow-emerald-600/30 transition-all"
               >
                 <Play className="w-4 h-4" />

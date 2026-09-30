@@ -68,12 +68,46 @@ export interface LevelConfig {
 }
 
 interface GameModeRow {
+  id: GameMode;
   question_kinds: string[];
   questions_per_round: number;
   seconds_per_question: number;
   lives: number;
   difficulty_min: number;
   difficulty_max: number;
+}
+
+// `game_modes` son 5 filas de configuración fija (tiempo, vidas, dificultad
+// por modo) sembradas por migración -- no cambian en vivo durante una
+// sesión de juego. Antes se volvían a pedir a Supabase en CADA inicio de
+// nivel, sumando un viaje de red completo antes de siquiera poder pedir las
+// preguntas (ver queja "sigue demorando un poco en cargar"). Cacheamos el
+// resultado en memoria del módulo: se pide una sola vez por sesión del
+// navegador y desde el segundo nivel en adelante el inicio de nivel solo
+// necesita UNA consulta (la de `questions`) en vez de dos en serie.
+let gameModesCache: Map<GameMode, GameModeRow> | null = null;
+let gameModesPromise: Promise<Map<GameMode, GameModeRow>> | null = null;
+
+async function loadGameModes(): Promise<Map<GameMode, GameModeRow>> {
+  if (gameModesCache) return gameModesCache;
+  if (!gameModesPromise) {
+    gameModesPromise = (async () => {
+      const { data, error } = await supabase
+        .from('game_modes')
+        .select('id, question_kinds, questions_per_round, seconds_per_question, lives, difficulty_min, difficulty_max');
+      if (error) {
+        gameModesPromise = null; // permite reintentar en el próximo nivel si falló por red
+        throw error;
+      }
+      const map = new Map<GameMode, GameModeRow>();
+      for (const row of (data ?? []) as GameModeRow[]) {
+        map.set(row.id, row);
+      }
+      gameModesCache = map;
+      return map;
+    })();
+  }
+  return gameModesPromise;
 }
 
 interface QuestionRow {
@@ -95,13 +129,9 @@ export async function fetchQuestionsForLevel(
   regionId: string,
   gameModeId: GameMode,
 ): Promise<{ questions: MathQuestion[]; config: LevelConfig }> {
-  const { data: gameMode, error: gameModeError } = await supabase
-    .from('game_modes')
-    .select('question_kinds, questions_per_round, seconds_per_question, lives, difficulty_min, difficulty_max')
-    .eq('id', gameModeId)
-    .single();
-  if (gameModeError) throw gameModeError;
-  const gm = gameMode as GameModeRow;
+  const gameModes = await loadGameModes();
+  const gm = gameModes.get(gameModeId);
+  if (!gm) throw new Error(`No encontramos la configuración del modo de juego "${gameModeId}".`);
 
   const { data: rows, error: questionsError } = await supabase
     .from('questions')

@@ -2,6 +2,37 @@ import React, { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { REGIONS } from '../data/regionsData';
 import { GameMode } from '../types';
+
+/** Cómo se ve un mesh "en reposo": lo que hace falta para volver ahí después
+ * de una animación de victoria/derrota, sin conocer de antemano qué mesh es
+ * ni qué animación le van a aplicar. */
+interface FinishMeshSnapshot {
+  visible: boolean;
+  position: THREE.Vector3;
+  rotation: THREE.Euler;
+  opacity: number | null;
+}
+
+function snapshotFinishMesh(obj: THREE.Object3D): FinishMeshSnapshot {
+  const mat = 'material' in obj ? (obj as THREE.Mesh).material : undefined;
+  const opacity = mat && !Array.isArray(mat) && 'opacity' in mat ? (mat as THREE.MeshBasicMaterial).opacity : null;
+  return {
+    visible: obj.visible,
+    position: obj.position.clone(),
+    rotation: obj.rotation.clone(),
+    opacity,
+  };
+}
+
+function restoreFinishMesh(obj: THREE.Object3D, snap: FinishMeshSnapshot) {
+  obj.visible = snap.visible;
+  obj.position.copy(snap.position);
+  obj.rotation.copy(snap.rotation);
+  if (snap.opacity !== null) {
+    const mat = 'material' in obj ? (obj as THREE.Mesh).material : undefined;
+    if (mat && !Array.isArray(mat) && 'opacity' in mat) (mat as THREE.MeshBasicMaterial).opacity = snap.opacity;
+  }
+}
 import {
   createRunnerCharacter,
   createKnightHeroCharacter,
@@ -657,6 +688,33 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
   gameWonRef.current = gameWon;
   const gameOverRef = useRef(gameOver);
   gameOverRef.current = gameOver;
+  // totalQuestions llega en 0 al entrar a un nivel y cambia a su valor real
+  // apenas responde Supabase (ver fetchQuestionsForLevel). Antes ese cambio
+  // estaba en las deps del efecto de reconstrucción de región (~2000 líneas)
+  // y provocaba un SEGUNDO rebuild completo de toda la escena 3D justo al
+  // terminar de cargar las preguntas (la sensación de "se traba al iniciar").
+  // Con la ref, el efecto pesado usa siempre el valor más reciente sin volver
+  // a dispararse por este cambio; el efecto liviano de abajo
+  // (renderBridgeSegments) ya se encarga de refrescar el puente cuando
+  // totalQuestions/bridgeBuiltSegments cambian.
+  const totalQuestionsRef = useRef(totalQuestions);
+  totalQuestionsRef.current = totalQuestions;
+  // Mismo motivo que totalQuestionsRef: estos tres valores se leen dentro del
+  // efecto "Handle Response Animation" (más abajo) pero NO deben estar en sus
+  // dependencias. Antes lo estaban -- junto con heroHp/enemyHp/cluesFound/
+  // shopCartTotal, que ni siquiera se usan ahí -- así que cualquier cambio de
+  // esos valores (aunque isCorrect siguiera igual) relanzaba una animación de
+  // ataque/carrera NUEVA por encima de la anterior sin cancelarla, dos loops
+  // de requestAnimationFrame peleándose por la misma posición del personaje.
+  // Eso es el bug visual reportado en Batalla (y presente, menos visible, en
+  // los demás juegos) -- y por qué salir al mapa y volver "lo arreglaba": el
+  // efecto de reconstrucción de región crea personajes nuevos y limpios.
+  const raceProgressRef = useRef(raceProgress);
+  raceProgressRef.current = raceProgress;
+  const bridgeBuiltSegmentsRef = useRef(bridgeBuiltSegments);
+  bridgeBuiltSegmentsRef.current = bridgeBuiltSegments;
+  const questionIndexRef = useRef(questionIndex);
+  questionIndexRef.current = questionIndex;
 
   // Dynamic references for animated scene objects
   const runnerCharRef = useRef<RunnerCharacterResult | null>(null);
@@ -718,6 +776,17 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
   const castlePortcullisRef = useRef<THREE.Mesh | null>(null);
   const castleSparklesRef = useRef<THREE.Group | null>(null);
   const castleQuestionMarksRef = useRef<THREE.Group | null>(null);
+  // Haz de luz dorado tipo "bóveda" que sale por la puerta del castillo al
+  // ganar el nivel completo de Detective (oculto hasta la victoria).
+  const castleGateGlowRef = useRef<THREE.Mesh | null>(null);
+
+  // "Foto" de cómo se ve cada mesh de victoria/derrota en reposo (posición,
+  // rotación, visibilidad, opacidad), tomada una sola vez apenas se monta la
+  // escena -- antes de cualquier animación de victoria/derrota. Se usa para
+  // volver exactamente ahí al empezar un nivel nuevo, sin tener que hardcodear
+  // valores a mano ni acordarse de actualizar una lista cada vez que se agregue
+  // una animación nueva (ver ADR-014/ADR-015 en docs/DECISIONS.md).
+  const finishMeshSnapshotsRef = useRef<Map<THREE.Object3D, FinishMeshSnapshot> | null>(null);
 
   // In-Scene 3D Dynamic Particle Systems
   const runnerDustGroupRef = useRef<THREE.Group | null>(null);
@@ -2548,7 +2617,7 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
         // Dynamic Bridge Segments Group
         const bridgeGroup = new THREE.Group();
         bridgeSegmentsGroupRef.current = bridgeGroup;
-        renderBridgeSegments(bridgeGroup, bridgeBuiltSegments, totalQuestions);
+        renderBridgeSegments(bridgeGroup, bridgeBuiltSegments, totalQuestionsRef.current);
         rootGroup.add(bridgeGroup);
 
         // Victory Flag on Destination Cliff (Plants on win)
@@ -2576,7 +2645,7 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
 
         // Character walking across the bridge (Sculpted explorer with ranger hat, vest pockets, pack & staff)
         const walkerObj = createExplorerCharacter();
-        const walkerX = -2.6 + (bridgeBuiltSegments / Math.max(1, totalQuestions)) * 5.2;
+        const walkerX = -2.6 + (bridgeBuiltSegments / Math.max(1, totalQuestionsRef.current)) * 5.2;
         walkerObj.group.position.set(walkerX, 1.12, 0);
         walkerObj.group.rotation.y = Math.PI / 2;
         rootGroup.add(walkerObj.group);
@@ -3066,11 +3135,31 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
         beam.rotation.z = -Math.PI / 6;
         rootGroup.add(beam);
         castleBeamMeshRef.current = beam;
+
+        // Haz de luz dorado tipo "bóveda" que sale por la puerta al ganar el
+        // nivel completo (oculto hasta la secuencia de victoria, más abajo).
+        const gateGlowMat = new THREE.MeshBasicMaterial({
+          color: 0xfef08a,
+          transparent: true,
+          opacity: 0.55,
+          side: THREE.DoubleSide,
+          depthWrite: false,
+        });
+        const gateGlow = new THREE.Mesh(new THREE.ConeGeometry(2.4, 5.2, 16, 1, true), gateGlowMat);
+        gateGlow.rotation.x = -Math.PI / 2;
+        gateGlow.position.set(0, 1.8, -1.2);
+        gateGlow.visible = false;
+        rootGroup.add(gateGlow);
+        castleGateGlowRef.current = gateGlow;
       }
     }
 
     scene.add(rootGroup);
-  }, [viewMode, currentRegionId, gameMode, totalQuestions]);
+    // totalQuestions se lee vía totalQuestionsRef (ver arriba) a propósito:
+    // no debe estar aquí. Si se cambia, este efecto reconstruye TODA la
+    // escena 3D (~2000 líneas de geometría) y no hace falta para ese cambio.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewMode, currentRegionId, gameMode]);
 
   // Update Dynamic Bridge Segments and advance walker when bridgeBuiltSegments changes
   useEffect(() => {
@@ -3120,7 +3209,7 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
         // Runner pushes forward with a sustained, powerful burst of speed (1300ms)
         // Stays at new position permanently, maintaining forward momentum
         runnerStumbleActiveRef.current = false;
-        const targetZ = THREE.MathUtils.lerp(4, -8, Math.min(1, (raceProgress || 0) / 100));
+        const targetZ = THREE.MathUtils.lerp(4, -8, Math.min(1, (raceProgressRef.current || 0) / 100));
 
         // Smoothly adjust camera along with runner to follow progress down the track
         targetCamPos.current.set(0, 4.2, Math.max(-4.5, targetZ + 4.5));
@@ -3541,11 +3630,11 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
       }
     } else if (gameMode === 'bridge' && bridgeWalkerRef.current) {
       const walker = bridgeWalkerRef.current;
-      const totalSegs = totalQuestions || 5;
+      const totalSegs = totalQuestionsRef.current || 5;
       const startX = -2.6;
       const endX = 2.6;
       const currentX = walker.position.x;
-      const targetX = startX + (bridgeBuiltSegments / totalSegs) * (endX - startX);
+      const targetX = startX + (bridgeBuiltSegmentsRef.current / totalSegs) * (endX - startX);
       const startTime = performance.now();
 
       if (isCorrect) {
@@ -3639,7 +3728,7 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
         requestAnimationFrame(anim);
       }
     } else if (gameMode === 'detective' && castleLockBarsRef.current.length > 0) {
-      const activeIdx = Math.min(questionIndex, 4);
+      const activeIdx = Math.min(questionIndexRef.current, 4);
       const activeBar = castleLockBarsRef.current[activeIdx];
       const beam = castleBeamMeshRef.current;
       const doorLeft = castleDoorLeftRef.current;
@@ -3665,8 +3754,8 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
               activeBar.material.color.setHex(0xfbbf24);
               activeBar.material.emissive.setHex(0xd97706);
             }
-            const openFactor = Math.min((questionIndex + 1) / 5, 1.0);
-            const maxAngle = questionIndex >= 4 ? 1.25 : openFactor * 0.65;
+            const openFactor = Math.min((questionIndexRef.current + 1) / 5, 1.0);
+            const maxAngle = questionIndexRef.current >= 4 ? 1.25 : openFactor * 0.65;
             if (doorLeft) doorLeft.rotation.y = -THREE.MathUtils.lerp(0, maxAngle, elapsed);
             if (doorRight) doorRight.rotation.y = THREE.MathUtils.lerp(0, maxAngle, elapsed);
 
@@ -3706,7 +3795,16 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
         requestAnimationFrame(anim);
       }
     }
-  }, [isCorrect, gameMode, heroHp, enemyHp, raceProgress, bridgeBuiltSegments, questionIndex, totalQuestions, cluesFound, shopCartTotal]);
+    // heroHp/enemyHp/cluesFound/shopCartTotal no se usan en este efecto (eran
+    // dependencias espurias). raceProgress/bridgeBuiltSegments/questionIndex/
+    // totalQuestions sí se usan pero se leen por ref (arriba) para que SOLO
+    // una respuesta real (isCorrect null -> valor) dispare una animación:
+    // antes, cualquiera de esos 8 valores cambiando volvía a ejecutar este
+    // efecto con isCorrect todavía en true/false, lanzando un SEGUNDO loop de
+    // requestAnimationFrame por encima del anterior (sin cancelarlo) sobre el
+    // mismo personaje -- el bug visual de Batalla reportado.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isCorrect, gameMode]);
 
   // Handle Win/Loss Animations in 3D
   useEffect(() => {
@@ -3714,35 +3812,52 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
       // Nivel nuevo (o reiniciado): el canvas 3D no se vuelve a montar entre
       // niveles -- solo cambian las props -- así que sin este reset, el
       // confeti y las animaciones de victoria/derrota de la ronda anterior se
-      // quedaban pegados en el siguiente nivel (puente ya "construido",
-      // puertas ya abiertas, confeti cayendo desde el segundo 0). Deja cada
-      // mesh exactamente en el mismo estado que tenía al crearse, arriba en
-      // este mismo archivo.
-      if (finishRibbonRef.current) finishRibbonRef.current.visible = true;
-      if (finishConfettiGroupRef.current) finishConfettiGroupRef.current.visible = false;
-      if (enemyFighterRef.current) enemyFighterRef.current.visible = true;
-      if (golemCrumbleGroupRef.current) golemCrumbleGroupRef.current.visible = false;
-      if (heroVictoryAuraRef.current) {
-        (heroVictoryAuraRef.current.material as THREE.MeshBasicMaterial).opacity = 0;
+      // quedaban pegadas en el siguiente nivel (puente ya "construido",
+      // puertas ya abiertas, confeti cayendo desde el segundo 0).
+      const finishMeshes: (THREE.Object3D | null)[] = [
+        finishRibbonRef.current,
+        finishConfettiGroupRef.current,
+        enemyFighterRef.current,
+        golemCrumbleGroupRef.current,
+        heroVictoryAuraRef.current,
+        shopCheerCoinsRef.current,
+        shopCelebrationBagRef.current,
+        bridgeVictoryFlagRef.current,
+        castleSparklesRef.current,
+        castleGateGlowRef.current,
+        castleDoorLeftRef.current,
+        castleDoorRightRef.current,
+        castleDetectiveRef.current,
+        runnerSweatRef.current,
+        runnerGroupRef.current,
+        heroDizzyStarsRef.current,
+        heroFighterRef.current,
+        shopClosedSignRef.current,
+        bridgeBrokenPlankRef.current,
+        castleQuestionMarksRef.current,
+        castlePortcullisRef.current,
+        ...castleLockBarsRef.current,
+      ];
+
+      if (!finishMeshSnapshotsRef.current) {
+        // Primera vez que corre este efecto -- es el montaje inicial, antes
+        // de cualquier victoria/derrota, así que todo está todavía en su
+        // posición de creación. Se guarda tal cual, una sola vez, para poder
+        // volver exactamente ahí después de cada nivel sin tener que conocer
+        // (ni mantener actualizados) los valores numéricos de cada mesh.
+        const snapshots = new Map<THREE.Object3D, FinishMeshSnapshot>();
+        finishMeshes.forEach((obj) => {
+          if (obj) snapshots.set(obj, snapshotFinishMesh(obj));
+        });
+        finishMeshSnapshotsRef.current = snapshots;
+        return;
       }
-      if (shopCheerCoinsRef.current) shopCheerCoinsRef.current.visible = false;
-      if (shopCelebrationBagRef.current) shopCelebrationBagRef.current.visible = false;
-      if (bridgeVictoryFlagRef.current) bridgeVictoryFlagRef.current.visible = false;
-      if (castleSparklesRef.current) castleSparklesRef.current.visible = false;
-      if (castleDoorLeftRef.current) castleDoorLeftRef.current.rotation.y = 0;
-      if (castleDoorRightRef.current) castleDoorRightRef.current.rotation.y = 0;
-      if (castleDetectiveRef.current) castleDetectiveRef.current.position.z = 2.2;
-      if (runnerSweatRef.current) runnerSweatRef.current.visible = false;
-      if (runnerGroupRef.current) runnerGroupRef.current.rotation.x = 0;
-      if (heroDizzyStarsRef.current) heroDizzyStarsRef.current.visible = false;
-      if (heroFighterRef.current) heroFighterRef.current.rotation.z = 0;
-      if (shopClosedSignRef.current) shopClosedSignRef.current.visible = false;
-      if (bridgeBrokenPlankRef.current) bridgeBrokenPlankRef.current.visible = false;
-      if (castleQuestionMarksRef.current) castleQuestionMarksRef.current.visible = false;
-      if (castlePortcullisRef.current) {
-        castlePortcullisRef.current.visible = false;
-        castlePortcullisRef.current.position.y = 5.8;
-      }
+
+      finishMeshes.forEach((obj) => {
+        if (!obj) return;
+        const snap = finishMeshSnapshotsRef.current!.get(obj);
+        if (snap) restoreFinishMesh(obj, snap);
+      });
       return;
     }
 
@@ -3844,26 +3959,58 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
           requestAnimationFrame(anim);
         }
       } else if (gameMode === 'detective') {
-        // All doors swing fully open, treasure sparkles float up, detective steps forward
+        // VICTORIA DEL CASTILLO: las barras del candado se deslizan y
+        // desaparecen, las puertas se abren de par en par, sale el haz de
+        // luz dorado de la bóveda y el detective salta triunfante hacia la
+        // entrada con su lupa en alto.
         const doorLeft = castleDoorLeftRef.current;
         const doorRight = castleDoorRightRef.current;
         const det = castleDetectiveRef.current;
+
+        // Deslizar y ocultar todas las barras del candado
+        castleLockBarsRef.current.forEach((bolt) => {
+          bolt.position.x = 4.0;
+          bolt.visible = false;
+        });
+
         if (castleSparklesRef.current) castleSparklesRef.current.visible = true;
+        if (castleGateGlowRef.current) castleGateGlowRef.current.visible = true;
         if (finishConfettiGroupRef.current) finishConfettiGroupRef.current.visible = true;
-        targetCamPos.current.set(0, 3.4, 4.5);
-        targetCamLookAt.current.set(0, 1.5, -1.8);
+
+        targetCamPos.current.set(0, 2.9, 4.6);
+        targetCamLookAt.current.set(0, 1.6, -1.2);
+
+        const startX = det ? det.position.x : -1.8;
+        const startZ = det ? det.position.z : 2.2;
+        const targetX = 0;
+        const targetZ = 0.2;
 
         const anim = (time: number) => {
-          const elapsed = (time - startTime) / 1000;
+          const elapsed = (time - startTime) / 1400;
           if (elapsed < 1.0) {
-            if (doorLeft) doorLeft.rotation.y = -THREE.MathUtils.lerp(0, 1.4, elapsed);
-            if (doorRight) doorRight.rotation.y = THREE.MathUtils.lerp(0, 1.4, elapsed);
-            if (det) det.position.z = THREE.MathUtils.lerp(2.2, 0.5, elapsed);
+            // Puertas de roble macizo abriéndose con easing cinematográfico
+            const doorOpenEase = THREE.MathUtils.smoothstep(elapsed, 0, 0.85);
+            if (doorLeft) doorLeft.rotation.y = -THREE.MathUtils.lerp(0, 1.65, doorOpenEase);
+            if (doorRight) doorRight.rotation.y = THREE.MathUtils.lerp(0, 1.65, doorOpenEase);
+
+            // Salto triunfal del detective hacia la entrada dorada
+            if (det) {
+              const jumpProgress = Math.min(1.0, elapsed * 1.15);
+              det.position.x = THREE.MathUtils.lerp(startX, targetX, jumpProgress);
+              det.position.z = THREE.MathUtils.lerp(startZ, targetZ, jumpProgress);
+              det.position.y = 0.3 + Math.sin(jumpProgress * Math.PI) * 1.7;
+              det.rotation.y = THREE.MathUtils.lerp(Math.PI / 4, 0, jumpProgress) + Math.sin(jumpProgress * Math.PI * 2) * 0.35;
+            }
             requestAnimationFrame(anim);
           } else {
-            if (doorLeft) doorLeft.rotation.y = -1.4;
-            if (doorRight) doorRight.rotation.y = 1.4;
-            if (det) det.position.z = 0.5;
+            if (doorLeft) doorLeft.rotation.y = -1.65;
+            if (doorRight) doorRight.rotation.y = 1.65;
+            if (det) {
+              det.position.x = targetX;
+              det.position.z = targetZ;
+              det.position.y = 0.35;
+              det.rotation.y = 0;
+            }
           }
         };
         requestAnimationFrame(anim);
@@ -4368,6 +4515,12 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
 
       if (heroDizzyStarsRef.current && heroDizzyStarsRef.current.visible) {
         heroDizzyStarsRef.current.rotation.y = time * 4.5;
+      }
+
+      if (castleGateGlowRef.current && castleGateGlowRef.current.visible) {
+        castleGateGlowRef.current.rotation.z = time * 0.4;
+        const beamPulse = 0.48 + Math.sin(time * 5.5) * 0.16;
+        (castleGateGlowRef.current.material as THREE.MeshBasicMaterial).opacity = beamPulse;
       }
 
       if (heroVictoryAuraRef.current && heroVictoryAuraRef.current.visible) {
