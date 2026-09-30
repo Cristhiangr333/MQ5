@@ -115,9 +115,17 @@ export default function App({ playerName, courseName, onExit }: AppProps = {}) {
   const [tutorialGameMode, setTutorialGameMode] = useState<GameMode | null>(null);
   // Pausa manual: detiene el cronómetro sin tocar el resto del estado de la ronda.
   const [isPaused, setIsPaused] = useState(false);
+  // Id de la región recién desbloqueada mientras dura la celebración "Mario
+  // Galaxy" sobre el mapa (null = no hay ninguna celebración activa).
+  const [unlockingRegionId, setUnlockingRegionId] = useState<string | null>(null);
+  const [completedRegionName, setCompletedRegionName] = useState<string | undefined>(undefined);
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const submittedRef = useRef(false);
+  // Guarda una región recién desbloqueada detectada dentro de finishRound()
+  // hasta que el jugador realmente vuelve al mapa (no queremos la
+  // celebración tapando el GameOverModal de victoria que sigue abierto).
+  const pendingUnlockRef = useRef<{ regionId: string; fromRegionName: string } | null>(null);
 
   const currentRegion = findRegion(currentRegionId);
   const currentGameMode = findGameMode(currentGameModeId);
@@ -130,8 +138,10 @@ export default function App({ playerName, courseName, onExit }: AppProps = {}) {
       setRegionsProgress(regions);
       setTotalXp(xp);
       setStats((prev) => ({ ...prev, totalXp: xp }));
+      return regions;
     } catch (err) {
       setProgressError(err instanceof Error ? err.message : 'No pudimos cargar tu progreso.');
+      return null;
     } finally {
       setProgressLoading(false);
     }
@@ -183,6 +193,8 @@ export default function App({ playerName, courseName, onExit }: AppProps = {}) {
       if (region && !region.unlocked) return; // región bloqueada: no hacer nada
       const gameModeId = pickResumeLevel(region);
       playSfx('click');
+      setUnlockingRegionId(null);
+      setCompletedRegionName(undefined);
       void initLevelSession(regionId, gameModeId);
     },
     [regionsProgress, initLevelSession],
@@ -192,6 +204,8 @@ export default function App({ playerName, courseName, onExit }: AppProps = {}) {
   const handleSelectLevel = useCallback(
     (regionId: string, gameModeId: GameMode) => {
       playSfx('click');
+      setUnlockingRegionId(null);
+      setCompletedRegionName(undefined);
       void initLevelSession(regionId, gameModeId);
     },
     [initLevelSession],
@@ -203,6 +217,11 @@ export default function App({ playerName, courseName, onExit }: AppProps = {}) {
       if (submittedRef.current) return;
       submittedRef.current = true;
       setSession((prev) => ({ ...prev, isSubmitting: true, submitError: null }));
+      // Foto del progreso ANTES de guardar, para comparar contra lo que
+      // devuelva loadProgress() y detectar si esta ronda desbloqueó una
+      // región nueva (el servidor decide el umbral de XP, no nosotros).
+      const previouslyUnlocked = new Set(regionsProgress.filter((r) => r.unlocked).map((r) => r.regionId));
+      const completedRegionNameSnapshot = currentRegion.name;
       try {
         const result = await submitRound(currentRegionId, currentGameModeId, finalAnswers);
         setStats((prev) => ({ ...prev, totalXp: prev.totalXp + result.xp_earned }));
@@ -211,7 +230,16 @@ export default function App({ playerName, courseName, onExit }: AppProps = {}) {
         // queda clicable con el desbloqueo del próximo nivel todavía desactualizado
         // (carrera real, encontrada por un estudiante haciendo clic rápido).
         setSession((prev) => ({ ...prev, xpEarned: result.xp_earned }));
-        await loadProgress();
+        const newRegions = await loadProgress();
+        if (newRegions) {
+          const newlyUnlocked = newRegions.find((r) => r.unlocked && !previouslyUnlocked.has(r.regionId));
+          if (newlyUnlocked) {
+            // No se muestra todavía: el GameOverModal de victoria sigue
+            // abierto encima. Se consume recién cuando el jugador vuelve al
+            // mapa (ver handleNextLevel / onGoToMap más abajo).
+            pendingUnlockRef.current = { regionId: newlyUnlocked.regionId, fromRegionName: completedRegionNameSnapshot };
+          }
+        }
         setSession((prev) => ({ ...prev, isSubmitting: false }));
       } catch (err) {
         setSession((prev) => ({
@@ -221,7 +249,7 @@ export default function App({ playerName, courseName, onExit }: AppProps = {}) {
         }));
       }
     },
-    [currentRegionId, currentGameModeId, loadProgress],
+    [currentRegionId, currentGameModeId, currentRegion.name, regionsProgress, loadProgress],
   );
 
   // Answer handler
@@ -397,6 +425,20 @@ export default function App({ playerName, courseName, onExit }: AppProps = {}) {
     subtitle: `Nivel ${currentGameMode.sortOrder} de 5 · ${currentRegion.shortName}`,
   };
 
+  // Vuelve al mapa y, si finishRound() detectó una región recién
+  // desbloqueada en esta ronda, dispara la celebración justo ahora
+  // (nunca mientras el GameOverModal de victoria sigue abierto encima).
+  const goToMap = useCallback(() => {
+    setViewMode('map');
+    setSession((s) => ({ ...s, gameOver: false, gameWon: false }));
+    if (pendingUnlockRef.current) {
+      setUnlockingRegionId(pendingUnlockRef.current.regionId);
+      setCompletedRegionName(pendingUnlockRef.current.fromRegionName);
+      pendingUnlockRef.current = null;
+      playSfx('unlock');
+    }
+  }, []);
+
   // Siguiente nivel dentro de la misma región (para el botón del modal de victoria)
   const handleNextLevel = () => {
     const region = regionsProgress.find((r) => r.regionId === currentRegionId);
@@ -404,10 +446,14 @@ export default function App({ playerName, courseName, onExit }: AppProps = {}) {
     if (next && next.unlocked) {
       initLevelSession(currentRegionId, next.gameModeId);
     } else {
-      setViewMode('map');
-      setSession((s) => ({ ...s, gameOver: false, gameWon: false }));
+      goToMap();
     }
   };
+
+  const handleDismissUnlock = useCallback(() => {
+    setUnlockingRegionId(null);
+    setCompletedRegionName(undefined);
+  }, []);
 
   const handleDismissTutorial = useCallback(() => {
     if (!tutorialGameMode) return;
@@ -507,6 +553,9 @@ export default function App({ playerName, courseName, onExit }: AppProps = {}) {
             activeQuestion={activeQuestion}
             onSelectRegion={handleSelectRegion}
             onToggleViewMode={() => setViewMode((v) => (v === 'map' ? 'game' : 'map'))}
+            unlockingRegionId={unlockingRegionId}
+            previousRegionName={completedRegionName}
+            onDismissUnlock={handleDismissUnlock}
           />
         </section>
 
@@ -598,10 +647,7 @@ export default function App({ playerName, courseName, onExit }: AppProps = {}) {
         totalCount={session.totalQuestions}
         currentLevel={currentLevelInfo}
         onReplay={() => initLevelSession(currentRegionId, currentGameModeId)}
-        onGoToMap={() => {
-          setViewMode('map');
-          setSession((s) => ({ ...s, gameOver: false, gameWon: false }));
-        }}
+        onGoToMap={goToMap}
         onNextLevel={session.gameWon ? handleNextLevel : undefined}
       />
 

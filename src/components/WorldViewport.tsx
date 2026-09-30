@@ -3,6 +3,7 @@ import { ThreeWorldCanvas } from './ThreeWorldCanvas';
 import { IllustratedWorldViewport } from './IllustratedWorldViewport';
 import { DynamicParticleSystem } from './DynamicParticleSystem';
 import { WeatherOverlay, getWeatherInfo, WeatherIntensity } from './WeatherOverlay';
+import { GalaxyUnlockOverlay } from './GalaxyUnlockOverlay';
 import { GameMode, MathQuestion, RegionDefinition } from '../types';
 import { REGIONS } from '../data/regionsData';
 import { Eye, Layers, Compass, ArrowLeft } from 'lucide-react';
@@ -26,6 +27,10 @@ interface WorldViewportProps {
   activeQuestion: MathQuestion | null;
   onSelectRegion: (regionId: string) => void;
   onToggleViewMode: () => void;
+  /** Id de la región recién desbloqueada: activa la celebración sobre el mapa. */
+  unlockingRegionId?: string | null;
+  previousRegionName?: string;
+  onDismissUnlock?: () => void;
 }
 
 export const WorldViewport: React.FC<WorldViewportProps> = ({
@@ -47,6 +52,9 @@ export const WorldViewport: React.FC<WorldViewportProps> = ({
   activeQuestion,
   onSelectRegion,
   onToggleViewMode,
+  unlockingRegionId,
+  previousRegionName,
+  onDismissUnlock,
 }) => {
   // Engine: 'three' (WebGL 3D) es el modo PRINCIPAL. 'illustrated' es el
   // respaldo si el navegador no soporta WebGL o el docente lo prefiere.
@@ -203,6 +211,7 @@ export const WorldViewport: React.FC<WorldViewportProps> = ({
           gameWon={gameWon}
           gameOver={gameOver}
           onSelectRegion={onSelectRegion}
+          unlockingRegionId={unlockingRegionId}
           onWebGLError={() => {
             setWebGLError(true);
             setEngine('illustrated');
@@ -227,6 +236,17 @@ export const WorldViewport: React.FC<WorldViewportProps> = ({
           gameOver={gameOver}
           activeQuestion={activeQuestion}
           onSelectRegion={onSelectRegion}
+        />
+      )}
+
+      {/* Celebración "Mario Galaxy" de región recién desbloqueada (sobre
+          cualquiera de los dos motores, 3D o ilustrado) */}
+      {viewMode === 'map' && unlockingRegionId && (
+        <GalaxyUnlockOverlay
+          region={REGIONS.find((r) => r.id === unlockingRegionId) || REGIONS[0]}
+          previousRegionName={previousRegionName}
+          onPlayRegion={() => onSelectRegion(unlockingRegionId)}
+          onDismiss={onDismissUnlock || (() => {})}
         />
       )}
 
