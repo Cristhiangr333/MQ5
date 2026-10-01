@@ -6,63 +6,40 @@ import { supabase } from '../lib/supabase';
 import { friendlyError } from '../lib/errors';
 import { cleanName } from '../lib/validation';
 import { fetchCourseProgress } from '../lib/teacherProgress';
+import { REGIONS, GAME_MODES } from '../data/regionsData';
+import {
+  buildCourseCsv,
+  csvFileName,
+  needsAttention,
+  sortStudents as sortStudentsBy,
+  timeAgo,
+} from '../lib/teacherPanelUtils';
+import type { SortKey } from '../lib/teacherPanelUtils';
 import type { CourseRow, StudentProgressSummary, StudentRow } from '../lib/types';
 import { Button, Card, ErrorBanner, Field, FullScreenError, FullScreenLoader, Screen, Spinner } from '../components/ui';
 import { StudentDetailModal } from '../components/StudentDetailModal';
 
-/** Escapa un valor para una celda CSV (comillas dobles + separador ,). */
-function csvCell(value: string | number): string {
-  const s = String(value);
-  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-}
+/** Total de niveles que puede pasar un estudiante: regiones × niveles por región (hoy 4 × 5 = 20). */
+const TOTAL_LEVELS = REGIONS.length * GAME_MODES.length;
 
-/** Arma y descarga el CSV con el progreso de un curso, listo para pegar en una planilla de notas. */
+/** Descarga el CSV con el progreso de un curso, listo para pegar en una planilla de notas. */
 function exportCourseCsv(
   courseName: string,
   list: StudentRow[],
   progressRows: StudentProgressSummary[],
 ) {
-  const header = ['Nombre', 'Apellido', 'XP total', 'Regiones desbloqueadas', 'Niveles pasados (de 20)', 'Precisión (%)', 'Rondas jugadas', 'Última vez que jugó'];
-  const lines = [header.map(csvCell).join(',')];
-  for (const s of [...list].sort((a, b) => a.first_name.localeCompare(b.first_name))) {
-    const p = progressRows.find((r) => r.student_id === s.id);
-    lines.push(
-      [
-        s.first_name,
-        s.last_name,
-        p?.total_xp ?? 0,
-        p?.regions_unlocked ?? 0,
-        p?.levels_passed ?? 0,
-        p?.overall_accuracy ?? '',
-        p?.rounds_played ?? 0,
-        p?.last_played_at ? new Date(p.last_played_at).toLocaleDateString('es-CO') : 'Nunca ha jugado',
-      ]
-        .map(csvCell)
-        .join(','),
-    );
-  }
   // BOM para que Excel abra bien las tildes/ñ en español.
-  const blob = new Blob(['\uFEFF' + lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+  const blob = new Blob(['\uFEFF' + buildCourseCsv(list, progressRows, TOTAL_LEVELS)], {
+    type: 'text/csv;charset=utf-8;',
+  });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `${courseName.replace(/[^a-z0-9áéíóúñ]+/gi, '_')}_progreso.csv`;
+  a.download = csvFileName(courseName);
   document.body.appendChild(a);
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
-}
-
-/** "hace 2 días", "hoy", "Nunca ha jugado" a partir de un timestamp o null. */
-function timeAgo(iso: string | null): string {
-  if (!iso) return 'Nunca ha jugado';
-  const diffMs = Date.now() - new Date(iso).getTime();
-  const days = Math.floor(diffMs / 86_400_000);
-  if (days <= 0) return 'Jugó hoy';
-  if (days === 1) return 'Jugó ayer';
-  if (days < 30) return `Jugó hace ${days} días`;
-  const months = Math.floor(days / 30);
-  return `Jugó hace ${months} ${months === 1 ? 'mes' : 'meses'}`;
 }
 
 export default function TeacherPanel() {
@@ -101,7 +78,6 @@ export default function TeacherPanel() {
   const [studentRowBusy, setStudentRowBusy] = useState<string | null>(null);
   const [studentRowError, setStudentRowError] = useState<Record<string, string>>({});
 
-  type SortKey = 'name' | 'least_progress' | 'inactive';
   const [sortByCourse, setSortByCourse] = useState<Record<string, SortKey>>({});
 
   const loadCourseProgress = useCallback(async (courseId: string, force = false) => {
@@ -249,35 +225,8 @@ export default function TeacherPanel() {
     setConfirmDeleteStudentId(null);
   }
 
-  /** Nunca jugó, o no juega hace 14+ días: una señal simple para resaltar en la lista. */
-  function needsAttention(progress: StudentProgressSummary | undefined): boolean {
-    if (!progress) return false;
-    if (progress.rounds_played === 0) return true;
-    if (!progress.last_played_at) return true;
-    const days = (Date.now() - new Date(progress.last_played_at).getTime()) / 86_400_000;
-    return days >= 14;
-  }
-
-  /** Ordena la lista de un curso según lo elegido: alfabético (por defecto),
-   * quién va más atrás primero, o quién lleva más tiempo sin jugar primero.
-   * Los que todavía no tienen datos de progreso siempre quedan al final. */
   function sortStudents(courseId: string, list: StudentRow[]): StudentRow[] {
-    const sortKey = sortByCourse[courseId] ?? 'name';
-    if (sortKey === 'name') return list;
-    const rows = progressByCourse[courseId]?.rows ?? [];
-    const progressOf = (s: StudentRow) => rows.find((r) => r.student_id === s.id);
-    return [...list].sort((a, b) => {
-      const pa = progressOf(a);
-      const pb = progressOf(b);
-      if (!pa && !pb) return 0;
-      if (!pa) return 1; // sin datos: al final
-      if (!pb) return -1;
-      if (sortKey === 'least_progress') return pa.levels_passed - pb.levels_passed;
-      // 'inactive': nunca jugó primero, luego de más antiguo a más reciente
-      const ta = pa.last_played_at ? new Date(pa.last_played_at).getTime() : -Infinity;
-      const tb = pb.last_played_at ? new Date(pb.last_played_at).getTime() : -Infinity;
-      return ta - tb;
-    });
+    return sortStudentsBy(list, progressByCourse[courseId]?.rows ?? [], sortByCourse[courseId] ?? 'name');
   }
 
   if (state.status === 'loading') return <FullScreenLoader />;
@@ -469,7 +418,7 @@ export default function TeacherPanel() {
                                   <div className="flex flex-wrap items-center justify-between gap-2 bg-red-950/40 border border-red-800/60 rounded-lg px-3 py-2 -mx-1">
                                     <p className="text-xs text-red-200">
                                       ¿Borrar a <strong>{s.first_name} {s.last_name}</strong>? Se pierde para siempre
-                                      {progress ? ` su progreso (${progress.total_xp} XP, ${progress.levels_passed}/20 niveles)` : ' todo su progreso'}.
+                                      {progress ? ` su progreso (${progress.total_xp} XP, ${progress.levels_passed}/${TOTAL_LEVELS} niveles)` : ' todo su progreso'}.
                                       No se puede deshacer.
                                     </p>
                                     <div className="flex items-center gap-2 shrink-0">
@@ -556,7 +505,7 @@ export default function TeacherPanel() {
                                         </span>
                                         <span className="inline-flex items-center gap-1">
                                           <Star className="w-3.5 h-3.5 text-blue-300" aria-hidden="true" />
-                                          {progress.levels_passed}/20 niveles
+                                          {progress.levels_passed}/{TOTAL_LEVELS} niveles
                                         </span>
                                         {progress.overall_accuracy !== null && (
                                           <span
@@ -595,7 +544,12 @@ export default function TeacherPanel() {
           {archivedCourses.length > 0 && (
             <div className="mt-6">
               <button
-                onClick={() => setShowArchived((v) => !v)}
+                onClick={() => {
+                  // Al desplegar los archivados se carga su progreso: la confirmación de
+                  // borrado (irreversible) necesita mostrar el XP real que se perdería.
+                  if (!showArchived) archivedCourses.forEach((c) => void loadCourseProgress(c.id));
+                  setShowArchived((v) => !v);
+                }}
                 className="text-sm font-bold text-slate-400 hover:text-white inline-flex items-center gap-1.5"
               >
                 {showArchived ? 'Ocultar' : 'Ver'} cursos archivados ({archivedCourses.length})
@@ -605,10 +559,16 @@ export default function TeacherPanel() {
                   {archivedCourses.map((course) => {
                     const list = students.filter((s) => s.course_id === course.id);
                     const isConfirmingDelete = confirmDeleteCourseId === course.id;
-                    const totalXp = list.reduce(
-                      (sum, s) => sum + (progressByCourse[course.id]?.rows.find((r) => r.student_id === s.id)?.total_xp ?? 0),
-                      0,
-                    );
+                    // Solo se afirma un total de XP si el progreso REALMENTE se cargó; si no,
+                    // un "0 XP" falso haría parecer inofensivo un borrado irreversible.
+                    const archivedProgress = progressByCourse[course.id];
+                    const totalXp =
+                      archivedProgress?.status === 'ready'
+                        ? list.reduce(
+                            (sum, s) => sum + (archivedProgress.rows.find((r) => r.student_id === s.id)?.total_xp ?? 0),
+                            0,
+                          )
+                        : null;
                     return (
                       <li key={course.id}>
                         <Card className="opacity-70">
@@ -618,7 +578,13 @@ export default function TeacherPanel() {
                                 ¿Borrar <strong>{course.name}</strong> para siempre? Se pierde
                                 {list.length === 0
                                   ? ' el curso'
-                                  : ` a ${list.length === 1 ? '1 estudiante' : `los ${list.length} estudiantes`} (${totalXp} XP en total)`}
+                                  : ` a ${list.length === 1 ? '1 estudiante' : `los ${list.length} estudiantes`}${
+                                      totalXp !== null
+                                        ? ` (${totalXp} XP en total)`
+                                        : archivedProgress?.status === 'error'
+                                          ? ' y todo su progreso (no pudimos calcular el XP)'
+                                          : ' (calculando su XP...)'
+                                    }`}
                                 . A diferencia de archivar, esto no se puede deshacer.
                               </p>
                               <div className="flex items-center gap-2 shrink-0">
@@ -657,7 +623,12 @@ export default function TeacherPanel() {
                                   Reactivar
                                 </button>
                                 <button
-                                  onClick={() => setConfirmDeleteCourseId(course.id)}
+                                  onClick={() => {
+                                    // Red de seguridad: si el progreso no llegó (o falló), se (re)intenta
+                                    // al pedir el borrado, para no confirmar a ciegas.
+                                    void loadCourseProgress(course.id, archivedProgress?.status === 'error');
+                                    setConfirmDeleteCourseId(course.id);
+                                  }}
                                   disabled={courseRowBusy === course.id}
                                   title="Borrar para siempre (no se puede deshacer)"
                                   aria-label={`Borrar ${course.name} para siempre`}
