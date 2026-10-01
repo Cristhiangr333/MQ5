@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
-import { Archive, ArchiveRestore, Check, Copy, Flame, LogOut, Pencil, Plus, RefreshCw, Star, Trash2, Users, X } from 'lucide-react';
+import { Archive, ArchiveRestore, Check, Copy, Download, Flame, LogOut, Pencil, Plus, RefreshCw, Star, Trash2, Users, X } from 'lucide-react';
 import { useAuth } from '../auth/AuthProvider';
 import { supabase } from '../lib/supabase';
 import { friendlyError } from '../lib/errors';
@@ -9,6 +9,49 @@ import { fetchCourseProgress } from '../lib/teacherProgress';
 import type { CourseRow, StudentProgressSummary, StudentRow } from '../lib/types';
 import { Button, Card, ErrorBanner, Field, FullScreenError, FullScreenLoader, Screen, Spinner } from '../components/ui';
 import { StudentDetailModal } from '../components/StudentDetailModal';
+
+/** Escapa un valor para una celda CSV (comillas dobles + separador ,). */
+function csvCell(value: string | number): string {
+  const s = String(value);
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+/** Arma y descarga el CSV con el progreso de un curso, listo para pegar en una planilla de notas. */
+function exportCourseCsv(
+  courseName: string,
+  list: StudentRow[],
+  progressRows: StudentProgressSummary[],
+) {
+  const header = ['Nombre', 'Apellido', 'XP total', 'Regiones desbloqueadas', 'Niveles pasados (de 20)', 'Precisión (%)', 'Rondas jugadas', 'Última vez que jugó'];
+  const lines = [header.map(csvCell).join(',')];
+  for (const s of [...list].sort((a, b) => a.first_name.localeCompare(b.first_name))) {
+    const p = progressRows.find((r) => r.student_id === s.id);
+    lines.push(
+      [
+        s.first_name,
+        s.last_name,
+        p?.total_xp ?? 0,
+        p?.regions_unlocked ?? 0,
+        p?.levels_passed ?? 0,
+        p?.overall_accuracy ?? '',
+        p?.rounds_played ?? 0,
+        p?.last_played_at ? new Date(p.last_played_at).toLocaleDateString('es-CO') : 'Nunca ha jugado',
+      ]
+        .map(csvCell)
+        .join(','),
+    );
+  }
+  // BOM para que Excel abra bien las tildes/ñ en español.
+  const blob = new Blob(['\uFEFF' + lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${courseName.replace(/[^a-z0-9áéíóúñ]+/gi, '_')}_progreso.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
 
 /** "hace 2 días", "hoy", "Nunca ha jugado" a partir de un timestamp o null. */
 function timeAgo(iso: string | null): string {
@@ -373,6 +416,14 @@ export default function TeacherPanel() {
                             <RefreshCw className="w-3.5 h-3.5" aria-hidden="true" />
                             Actualizar progreso
                           </button>
+                          <button
+                            onClick={() => exportCourseCsv(course.name, list, progressByCourse[course.id]?.rows ?? [])}
+                            className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-300 hover:text-emerald-200"
+                            title="Descarga una tabla con el progreso de cada estudiante, lista para tu planilla de notas"
+                          >
+                            <Download className="w-3.5 h-3.5" aria-hidden="true" />
+                            Exportar a Excel/CSV
+                          </button>
                           <label className="text-xs text-slate-400 flex items-center gap-1.5">
                             Ordenar por
                             <select
@@ -507,6 +558,19 @@ export default function TeacherPanel() {
                                           <Star className="w-3.5 h-3.5 text-blue-300" aria-hidden="true" />
                                           {progress.levels_passed}/20 niveles
                                         </span>
+                                        {progress.overall_accuracy !== null && (
+                                          <span
+                                            className={`inline-flex items-center gap-1 font-semibold ${
+                                              progress.overall_accuracy >= 80
+                                                ? 'text-emerald-300'
+                                                : progress.overall_accuracy >= 50
+                                                  ? 'text-amber-300'
+                                                  : 'text-red-300'
+                                            }`}
+                                          >
+                                            {progress.overall_accuracy}% aciertos
+                                          </span>
+                                        )}
                                         <span className="hidden sm:inline text-slate-400">{timeAgo(progress.last_played_at)}</span>
                                         <span className="text-emerald-300 underline">Ver detalle</span>
                                       </button>

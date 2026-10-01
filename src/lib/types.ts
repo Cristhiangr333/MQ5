@@ -34,6 +34,8 @@ export interface StudentProgressSummary {
   regions_unlocked: number;
   levels_passed: number;
   rounds_played: number;
+  /** % de aciertos de toda la vida del estudiante (null = nunca jugó). */
+  overall_accuracy: number | null;
   last_played_at: string | null;
 }
 
@@ -48,4 +50,24 @@ export interface StudentLevelDetailRow {
   rounds_played: number;
   correct_count: number;
   questions_total: number;
+}
+
+/** Fila de get_student_difficulty_breakdown(): precisión por región y dificultad (1-3). */
+export interface StudentDifficultyRow {
+  region_id: string;
+  difficulty: 1 | 2 | 3;
+  correct_count: number;
+  questions_total: number;
+}
+
+/** Fila de get_student_recent_rounds(): una ronda jugada reciente. */
+export interface StudentRecentRound {
+  region_id: string;
+  game_mode_id: string;
+  correct_count: number;
+  questions_total: number;
+  completed: boolean;
+  stars: number;
+  xp_earned: number;
+  created_at: string;
 }
