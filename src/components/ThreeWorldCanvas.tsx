@@ -1294,6 +1294,13 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
     detectiveCharRef.current = null;
     bridgeSegmentsGroupRef.current = null;
     castleRunesRef.current = [];
+    // La escena se acaba de tirar y reconstruir de cero -- los meshes de
+    // victoria/derrota de ADR-014/015 (confeti, bandera, puertas...) son
+    // objetos nuevos ahora, distintos a los que había en la foto anterior. Sin
+    // esto, esa foto nunca se vuelve a tomar (solo se captura la primera vez
+    // en toda la sesión), así que el reset dejaría de proteger cualquier modo
+    // de juego que no fuera el primero que se cargó al abrir la app.
+    finishMeshSnapshotsRef.current = null;
 
     const rootGroup = new THREE.Group();
     rootGroup.name = 'custom_world_root';
