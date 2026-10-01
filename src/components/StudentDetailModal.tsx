@@ -41,20 +41,40 @@ export function StudentDetailModal({ studentId, studentName, onClose }: StudentD
     setDifficultyRows(null);
     setRecentRounds(null);
     setError(null);
-    Promise.all([
-      fetchStudentLevelDetail(studentId),
-      fetchStudentDifficultyBreakdown(studentId),
-      fetchStudentRecentRounds(studentId, 10),
-    ])
-      .then(([level, difficulty, recent]) => {
-        if (cancelled) return;
-        setRows(level);
-        setDifficultyRows(difficulty);
-        setRecentRounds(recent);
+
+    // El detalle por nivel es lo único imprescindible (existe desde antes);
+    // precisión por dificultad y actividad reciente son secciones nuevas que
+    // se agregan SI responden, pero si una de las dos falla (por ejemplo,
+    // justo después de correr la migración en Supabase, mientras el caché
+    // de esquema de PostgREST todavía no "se entera" de las funciones
+    // nuevas) no debe tumbar el modal entero -- antes sí pasaba, por usar
+    // Promise.all con las tres juntas.
+    fetchStudentLevelDetail(studentId)
+      .then((level) => {
+        if (!cancelled) setRows(level);
       })
       .catch((err) => {
         if (!cancelled) setError(friendlyError(err));
       });
+
+    fetchStudentDifficultyBreakdown(studentId)
+      .then((difficulty) => {
+        if (!cancelled) setDifficultyRows(difficulty);
+      })
+      .catch((err) => {
+        console.error('No se pudo cargar la precisión por dificultad:', err);
+        if (!cancelled) setDifficultyRows([]);
+      });
+
+    fetchStudentRecentRounds(studentId, 10)
+      .then((recent) => {
+        if (!cancelled) setRecentRounds(recent);
+      })
+      .catch((err) => {
+        console.error('No se pudo cargar la actividad reciente:', err);
+        if (!cancelled) setRecentRounds([]);
+      });
+
     return () => {
       cancelled = true;
     };
