@@ -61,13 +61,13 @@ const PROGRESS: Record<string, unknown[]> = {
 };
 
 /** Conecta el mock de Supabase con una "base" en memoria para las tablas que usa el panel. */
-function wireSupabase(db: Db, opts: { progressError?: boolean } = {}) {
+function wireSupabase(db: Db, opts: { progressError?: boolean; progress?: Record<string, unknown[]> } = {}) {
   mock.setSession({ user: { id: 't1', is_anonymous: false } });
   mock.client.rpc.mockImplementation(async (fn: string, params?: Record<string, unknown>) => {
     if (fn === 'get_my_role') return { data: 'teacher', error: null };
     if (fn === 'get_course_progress_summary') {
       if (opts.progressError) return { data: null, error: { message: 'boom' } };
-      return { data: PROGRESS[String(params?.p_course_id)] ?? [], error: null };
+      return { data: (opts.progress ?? PROGRESS)[String(params?.p_course_id)] ?? [], error: null };
     }
     return { data: [], error: null };
   });
@@ -262,6 +262,52 @@ describe('TeacherPanel con datos', () => {
     expect(text).toContain('Nombre,Apellido,XP total');
     expect(text).toContain('Ana,López,120,2,7,85,9,');
     expect(text).toContain('Beto,Ruiz,0,1,0,,0,Nunca ha jugado');
+  });
+});
+
+describe('TeacherPanel · resumen del curso', () => {
+  test('muestra cuántos juegan, el promedio de aciertos y quién necesita atención', async () => {
+    const user = userEvent.setup({ advanceTimers: () => undefined });
+    wireSupabase(seedDb());
+    await renderPanel();
+    await openCourseDetails(user);
+
+    const strip = await screen.findByRole('group', { name: 'Resumen del curso' });
+    expect(within(strip).getByText(/de 2 han jugado/)).toBeInTheDocument();
+    expect(within(strip).getByText('85%')).toBeInTheDocument();
+    expect(within(strip).getByText(/1 estudiante/)).toBeInTheDocument();
+    expect(within(strip).getByText(/sin jugar o inactivo$/)).toBeInTheDocument();
+  });
+
+  test('marca con 📉 a quien juega pero acierta poco, y lo cuenta en el resumen', async () => {
+    const user = userEvent.setup({ advanceTimers: () => undefined });
+    const progress = {
+      c1: [
+        { ...(PROGRESS.c1[0] as object), overall_accuracy: 85 },
+        {
+          student_id: 's2', first_name: 'Beto', last_name: 'Ruiz', total_xp: 30, regions_unlocked: 1,
+          levels_passed: 1, rounds_played: 5, overall_accuracy: 32, last_played_at: daysAgo(1),
+        },
+      ],
+    };
+    wireSupabase(seedDb(), { progress });
+    await renderPanel();
+    await openCourseDetails(user);
+
+    const strip = await screen.findByRole('group', { name: 'Resumen del curso' });
+    expect(within(strip).getByText(/con pocos aciertos/)).toBeInTheDocument();
+    expect(screen.getAllByLabelText('Pocos aciertos')).toHaveLength(1);
+    // Ambos juegan hace poco: nadie queda marcado como inactivo.
+    expect(screen.queryByLabelText('Necesita atención')).not.toBeInTheDocument();
+  });
+
+  test('si el progreso falla no se muestra un resumen inventado', async () => {
+    const user = userEvent.setup({ advanceTimers: () => undefined });
+    wireSupabase(seedDb(), { progressError: true });
+    await renderPanel();
+    await openCourseDetails(user);
+    await screen.findByRole('alert');
+    expect(screen.queryByRole('group', { name: 'Resumen del curso' })).not.toBeInTheDocument();
   });
 });
 

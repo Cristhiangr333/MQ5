@@ -10,14 +10,17 @@ import { REGIONS, GAME_MODES } from '../data/regionsData';
 import {
   buildCourseCsv,
   csvFileName,
+  hasLowAccuracy,
   needsAttention,
   sortStudents as sortStudentsBy,
+  summarizeCourse,
   timeAgo,
 } from '../lib/teacherPanelUtils';
 import type { SortKey } from '../lib/teacherPanelUtils';
 import type { CourseRow, StudentProgressSummary, StudentRow } from '../lib/types';
 import { Button, Card, ErrorBanner, Field, FullScreenError, FullScreenLoader, Screen, Spinner } from '../components/ui';
 import { StudentDetailModal } from '../components/StudentDetailModal';
+import { CourseSummaryStrip } from '../components/CourseSummaryStrip';
 
 /** Total de niveles que puede pasar un estudiante: regiones × niveles por región (hoy 4 × 5 = 20). */
 const TOTAL_LEVELS = REGIONS.length * GAME_MODES.length;
@@ -355,6 +358,9 @@ export default function TeacherPanel() {
                       <summary className="cursor-pointer min-h-10 inline-flex items-center text-sm font-bold text-slate-300 hover:text-white">
                         Ver estudiantes y su progreso
                       </summary>
+                      {progressByCourse[course.id]?.status === 'ready' && list.length > 0 && (
+                        <CourseSummaryStrip summary={summarizeCourse(list, progressByCourse[course.id].rows)} />
+                      )}
                       {progressByCourse[course.id] && progressByCourse[course.id].status !== 'loading' && list.length > 0 && (
                         <div className="flex flex-wrap items-center gap-3 mt-2">
                           <button
@@ -476,6 +482,11 @@ export default function TeacherPanel() {
                                         {needsAttention(progress) && (
                                           <span title="Nunca ha jugado o lleva 14+ días sin jugar" aria-label="Necesita atención">
                                             ⚠️
+                                          </span>
+                                        )}
+                                        {hasLowAccuracy(progress) && (
+                                          <span title="Juega, pero acierta menos del 50%" aria-label="Pocos aciertos">
+                                            📉
                                           </span>
                                         )}
                                         <button
