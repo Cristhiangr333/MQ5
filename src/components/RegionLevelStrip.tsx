@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { GAME_MODES } from '../data/regionsData';
 import { GameMode, RegionDefinition, RegionProgress } from '../types';
 import { Lock, CheckCircle2, ChevronRight } from 'lucide-react';
+import { previousRegionOf } from '../lib/unlocks';
 
 interface RegionLevelStripProps {
   regions: RegionDefinition[];
@@ -42,8 +43,10 @@ export const RegionLevelStrip: React.FC<RegionLevelStripProps> = ({
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-          {regions.map((region) => {
+          {regions.map((region, index) => {
             const regionProgress = progress.find((p) => p.regionId === region.id);
+            // Qué isla hay que terminar para abrir esta (desde la migración 0011 el XP ya no abre islas).
+            const prevRegion = previousRegionOf(regions, index);
             const isUnlocked = regionProgress?.unlocked ?? region.id === regions[0].id;
             const isViewing = region.id === viewingRegionId;
             const isPlaying = region.id === currentRegionId;
@@ -76,7 +79,7 @@ export const RegionLevelStrip: React.FC<RegionLevelStripProps> = ({
                     <p className="text-[10px] text-amber-400 font-mono">⭐ {starsTotal}/15{isPlaying ? ' · Jugando' : ''}</p>
                   ) : (
                     <p className="text-[10px] text-slate-500 flex items-center gap-1">
-                      <Lock className="w-2.5 h-2.5" /> {region.competency} · {regionProgress?.requiredXp ?? '?'} XP
+                      <Lock className="w-2.5 h-2.5" /> {prevRegion ? `Termina ${prevRegion.shortName}` : 'Bloqueada'}
                     </p>
                   )}
                 </div>

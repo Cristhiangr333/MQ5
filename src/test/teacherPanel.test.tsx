@@ -322,7 +322,7 @@ const REQUIRED_XP: Record<string, number> = { bosque: 0, montana: 50, ciudad: 15
 
 /**
  * Detalle de Ana (60 XP): pasó la Carrera del Bosque. Con `withRegionCols` incluye las
- * columnas de la migración 0010 (Montaña abierta; Ciudad y Castillo cerradas por XP).
+ * columnas de la migración 0010 (Montaña abierta; Ciudad y Castillo cerradas).
  */
 function levelRowsForAna(withRegionCols: boolean) {
   const rows: Array<Record<string, unknown>> = [];
@@ -353,16 +353,16 @@ describe('TeacherPanel · detalle del estudiante', () => {
     return screen.findByRole('dialog');
   }
 
-  test('con la migración 0010: las regiones cerradas por XP se ven bloqueadas y dicen cuánto falta', async () => {
+  test('con la migración 0010/0011: las regiones cerradas se ven bloqueadas y dicen qué isla hay que completar', async () => {
     const user = userEvent.setup({ advanceTimers: () => undefined });
     wireSupabase(seedDb(), { levelRows: levelRowsForAna(true) });
     await renderPanel();
     const dialog = await openAnaDetail(user);
 
-    expect(await within(dialog).findByText('Se abre con 150 XP')).toBeInTheDocument();
-    expect(within(dialog).getByText('Se abre con 300 XP')).toBeInTheDocument();
+    expect(await within(dialog).findByText('Se abre al completar Montaña de la Resta')).toBeInTheDocument();
+    expect(within(dialog).getByText('Se abre al completar Ciudad de la Multiplicación')).toBeInTheDocument();
     // La Montaña (abierta por XP) NO muestra candado de región.
-    expect(within(dialog).queryByText('Se abre con 50 XP')).not.toBeInTheDocument();
+    expect(within(dialog).queryByText('Se abre al completar Bosque de la Suma')).not.toBeInTheDocument();
     // Bosque: 3 bloqueados (niveles 3-5); Montaña: 4 (niveles 2-5); Ciudad y Castillo: 5 + 5.
     expect(within(dialog).getAllByText('Bloqueado')).toHaveLength(3 + 4 + 5 + 5);
   });

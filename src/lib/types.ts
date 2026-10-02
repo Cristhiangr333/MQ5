@@ -51,12 +51,12 @@ export interface StudentLevelDetailRow {
   correct_count: number;
   questions_total: number;
   /**
-   * Migración 0010: ¿su XP total alcanza para abrir esta región? Opcional a propósito:
+   * Migración 0010/0011: ¿tiene abierta esta región? (desde la 0011: completó la anterior). Opcional a propósito:
    * si la 0010 aún no se aplicó en Supabase, estos campos no llegan y el front se
    * comporta como antes (ver isLevelLocked).
    */
   region_unlocked?: boolean;
-  /** Migración 0010: XP necesario para abrir la región (para mostrarlo al docente). */
+  /** Migración 0010: XP de la región. Desde la 0011 YA NO abre nada (se abre al completar la anterior); solo informativo. */
   region_required_xp?: number;
 }
 

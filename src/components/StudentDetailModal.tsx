@@ -7,6 +7,7 @@ import {
 } from '../lib/teacherProgress';
 import { friendlyError } from '../lib/errors';
 import { isLevelLocked, isRegionLocked, sumAnswers, summarizeStudentDetail } from '../lib/teacherPanelUtils';
+import { previousRegionOf } from '../lib/unlocks';
 import type { StudentDifficultyRow, StudentLevelDetailRow, StudentRecentRound } from '../lib/types';
 import { REGIONS, GAME_MODES } from '../data/regionsData';
 import { Spinner, ErrorBanner } from './ui';
@@ -168,7 +169,7 @@ export function StudentDetailModal({ studentId, studentName, onClose }: StudentD
         {rows && (
           <div className="space-y-5">
             <StudentAnswerSummary summary={summarizeStudentDetail(rows)} />
-            {REGIONS.map((region) => {
+            {REGIONS.map((region, regionIndex) => {
               const regionRows = rows
                 .filter((r) => r.region_id === region.id)
                 .sort((a, b) => a.level_sort - b.level_sort);
@@ -182,8 +183,8 @@ export function StudentDetailModal({ studentId, studentName, onClose }: StudentD
                     {isRegionLocked(regionRows) && (
                       <span className="flex items-center gap-1 text-[11px] font-bold text-slate-400 font-['Nunito_Sans',sans-serif]">
                         <Lock className="w-3 h-3" aria-hidden="true" />
-                        {regionRows[0].region_required_xp !== undefined
-                          ? `Se abre con ${regionRows[0].region_required_xp} XP`
+                        {previousRegionOf(REGIONS, regionIndex)
+                          ? `Se abre al completar ${previousRegionOf(REGIONS, regionIndex)?.name}`
                           : 'Región bloqueada'}
                       </span>
                     )}

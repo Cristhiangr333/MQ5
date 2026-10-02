@@ -21,6 +21,7 @@ import {
   summarizeCourse,
   timeAgo,
 } from './teacherPanelUtils.ts';
+import { detectNewlyUnlocked, enqueueUnlocks, previousRegionOf } from './unlocks.ts';
 import type { StudentLevelDetailRow, StudentProgressSummary, StudentRow } from './types.ts';
 
 test('normalizeCourseCode: mayúsculas, sin símbolos, máx. 5', () => {
@@ -244,4 +245,43 @@ test('summarizeStudentDetail: totales, rondas y niveles con estrellas', () => {
     levelsWithStars: 2,
   });
   assert.deepEqual(summarizeStudentDetail([]).answers, { correct: 0, total: 0, wrong: 0, pct: null });
+});
+
+// ---------------------------------------------------------------------
+// Desbloqueo de regiones y cola de celebraciones (unlocks)
+// ---------------------------------------------------------------------
+
+const REGS = (open: string[]) =>
+  ['bosque', 'montana', 'ciudad', 'castillo'].map((id, i) => ({ regionId: id, sortOrder: i + 1, unlocked: open.includes(id) }));
+
+test('detectNewlyUnlocked: devuelve TODAS las nuevas, en orden de mapa (no solo la primera)', () => {
+  const before = new Set(['bosque']);
+  assert.deepEqual(detectNewlyUnlocked(before, REGS(['bosque'])), []);
+  assert.deepEqual(detectNewlyUnlocked(before, REGS(['bosque', 'montana'])), ['montana']);
+  // Dos de golpe: antes `.find()` perdía la segunda.
+  assert.deepEqual(detectNewlyUnlocked(before, REGS(['bosque', 'montana', 'ciudad'])), ['montana', 'ciudad']);
+  // El orden sale del mapa, no del orden del arreglo recibido.
+  assert.deepEqual(detectNewlyUnlocked(before, [...REGS(['bosque', 'montana', 'ciudad'])].reverse()), ['montana', 'ciudad']);
+  // Lo que ya estaba abierto no vuelve a celebrarse.
+  assert.deepEqual(detectNewlyUnlocked(new Set(['bosque', 'montana']), REGS(['bosque', 'montana'])), []);
+});
+
+test('enqueueUnlocks: no pisa las que esperan, no duplica y no muta', () => {
+  const q0: { regionId: string; fromRegionName: string }[] = [];
+  const q1 = enqueueUnlocks(q0, ['montana'], 'Bosque de la Suma');
+  assert.deepEqual(q1, [{ regionId: 'montana', fromRegionName: 'Bosque de la Suma' }]);
+  // Caso del bug: antes la segunda celebración pisaba a la primera.
+  const q2 = enqueueUnlocks(q1, ['ciudad'], 'Montaña de la Resta');
+  assert.deepEqual(q2.map((p) => p.regionId), ['montana', 'ciudad']);
+  // Misma región otra vez: no se duplica.
+  assert.equal(enqueueUnlocks(q2, ['montana'], 'X').length, 2);
+  assert.equal(q0.length, 0); // no mutó
+  assert.equal(q1.length, 1);
+});
+
+test('previousRegionOf: la región que hay que completar para abrir esta', () => {
+  const regs = ['Bosque', 'Montaña', 'Ciudad'];
+  assert.equal(previousRegionOf(regs, 0), undefined);
+  assert.equal(previousRegionOf(regs, 1), 'Bosque');
+  assert.equal(previousRegionOf(regs, 2), 'Montaña');
 });

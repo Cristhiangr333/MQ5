@@ -243,6 +243,7 @@ export const WorldViewport: React.FC<WorldViewportProps> = ({
           cualquiera de los dos motores, 3D o ilustrado) */}
       {viewMode === 'map' && unlockingRegionId && (
         <GalaxyUnlockOverlay
+          key={unlockingRegionId} // si hay varias celebraciones en cola, cada una arranca desde cero
           region={REGIONS.find((r) => r.id === unlockingRegionId) || REGIONS[0]}
           previousRegionName={previousRegionName}
           onPlayRegion={() => onSelectRegion(unlockingRegionId)}

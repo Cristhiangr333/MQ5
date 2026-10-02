@@ -10,10 +10,15 @@ import { RegionLevelStrip } from './components/RegionLevelStrip';
 import { GameOverModal } from './components/GameOverModal';
 import { GameModeTutorial } from './components/GameModeTutorial';
 import { PauseModal } from './components/PauseModal';
+import { detectNewlyUnlocked } from './lib/unlocks';
+import { useUnlockCelebrations } from './lib/useUnlockCelebrations';
+import { useDelayedFlag } from './lib/useDelayedFlag';
 import { Play, Compass, LogOut, Loader2, AlertTriangle } from 'lucide-react';
 
 const MAX_LIVES = 3;
 const TIME_PER_QUESTION_MS = 12000;
+// Pausa antes de mostrar el modal de victoria, para que se vea la animación 3D de la meta.
+const WIN_MODAL_DELAY_MS = 1800;
 // Respuesta imposible: marca la pregunta como respondida (mal) cuando se agota el
 // tiempo, para que la ronda cuente como "completa" ante submit_round (ver ADR-007).
 const TIMEOUT_SENTINEL_ANSWER = -1;
@@ -117,15 +122,19 @@ export default function App({ playerName, courseName, onExit }: AppProps = {}) {
   const [isPaused, setIsPaused] = useState(false);
   // Id de la región recién desbloqueada mientras dura la celebración "Mario
   // Galaxy" sobre el mapa (null = no hay ninguna celebración activa).
-  const [unlockingRegionId, setUnlockingRegionId] = useState<string | null>(null);
-  const [completedRegionName, setCompletedRegionName] = useState<string | undefined>(undefined);
+  // Celebraciones de "región desbloqueada": cola + visualización (ver useUnlockCelebrations).
+  // Se muestran solo en el mapa y sin el modal de resultado abierto, venga el jugador por
+  // la ruta que venga (botón, tecla M, pausa...).
+  const {
+    current: unlocking,
+    enqueue: enqueueUnlock,
+    dismiss: dismissUnlock,
+  } = useUnlockCelebrations(viewMode === 'map' && !session.gameOver && !session.gameWon, () => playSfx('unlock'));
+  const unlockingRegionId = unlocking?.regionId ?? null;
+  const completedRegionName = unlocking?.fromRegionName;
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const submittedRef = useRef(false);
-  // Guarda una región recién desbloqueada detectada dentro de finishRound()
-  // hasta que el jugador realmente vuelve al mapa (no queremos la
-  // celebración tapando el GameOverModal de victoria que sigue abierto).
-  const pendingUnlockRef = useRef<{ regionId: string; fromRegionName: string } | null>(null);
 
   const currentRegion = findRegion(currentRegionId);
   const currentGameMode = findGameMode(currentGameModeId);
@@ -210,19 +219,17 @@ export default function App({ playerName, courseName, onExit }: AppProps = {}) {
       if (region && !region.unlocked) return; // región bloqueada: no hacer nada
       const gameModeId = pickResumeLevel(region);
       playSfx('click');
-      setUnlockingRegionId(null);
-      setCompletedRegionName(undefined);
+      dismissUnlock();
       void initLevelSession(regionId, gameModeId);
     },
-    [regionsProgress, initLevelSession],
+    [regionsProgress, initLevelSession, dismissUnlock],
   );
 
   // Al elegir un nivel específico desde la tira región/nivel
   const handleSelectLevel = useCallback(
     (regionId: string, gameModeId: GameMode) => {
       playSfx('click');
-      setUnlockingRegionId(null);
-      setCompletedRegionName(undefined);
+      dismissUnlock();
       void initLevelSession(regionId, gameModeId);
     },
     [initLevelSession],
@@ -249,12 +256,12 @@ export default function App({ playerName, courseName, onExit }: AppProps = {}) {
         setSession((prev) => ({ ...prev, xpEarned: result.xp_earned }));
         const newRegions = await loadProgress();
         if (newRegions) {
-          const newlyUnlocked = newRegions.find((r) => r.unlocked && !previouslyUnlocked.has(r.regionId));
-          if (newlyUnlocked) {
-            // No se muestra todavía: el GameOverModal de victoria sigue
-            // abierto encima. Se consume recién cuando el jugador vuelve al
-            // mapa (ver handleNextLevel / onGoToMap más abajo).
-            pendingUnlockRef.current = { regionId: newlyUnlocked.regionId, fromRegionName: completedRegionNameSnapshot };
+          const newlyUnlockedIds = detectNewlyUnlocked(previouslyUnlocked, newRegions);
+          if (newlyUnlockedIds.length > 0) {
+            // No se muestra todavía: el GameOverModal de victoria sigue abierto encima.
+            // useUnlockCelebrations las muestra, una por una y en orden,
+            // cuando el jugador está en el mapa (sin importar por qué ruta llegó).
+            enqueueUnlock(newlyUnlockedIds, completedRegionNameSnapshot);
           }
         }
         setSession((prev) => ({ ...prev, isSubmitting: false }));
@@ -266,7 +273,7 @@ export default function App({ playerName, courseName, onExit }: AppProps = {}) {
         }));
       }
     },
-    [currentRegionId, currentGameModeId, currentRegion.name, regionsProgress, loadProgress],
+    [currentRegionId, currentGameModeId, currentRegion.name, regionsProgress, loadProgress, enqueueUnlock],
   );
 
   // Answer handler
@@ -442,18 +449,12 @@ export default function App({ playerName, courseName, onExit }: AppProps = {}) {
     subtitle: `Nivel ${currentGameMode.sortOrder} de 5 · ${currentRegion.shortName}`,
   };
 
-  // Vuelve al mapa y, si finishRound() detectó una región recién
-  // desbloqueada en esta ronda, dispara la celebración justo ahora
-  // (nunca mientras el GameOverModal de victoria sigue abierto encima).
+  // Vuelve al mapa. La celebración de una región recién desbloqueada NO se dispara
+  // aquí: la muestra el efecto "celebraciones pendientes", que cubre también la tecla
+  // M, los botones de vista y el menú de pausa.
   const goToMap = useCallback(() => {
     setViewMode('map');
     setSession((s) => ({ ...s, gameOver: false, gameWon: false }));
-    if (pendingUnlockRef.current) {
-      setUnlockingRegionId(pendingUnlockRef.current.regionId);
-      setCompletedRegionName(pendingUnlockRef.current.fromRegionName);
-      pendingUnlockRef.current = null;
-      playSfx('unlock');
-    }
   }, []);
 
   // Siguiente nivel dentro de la misma región (para el botón del modal de victoria)
@@ -468,9 +469,13 @@ export default function App({ playerName, courseName, onExit }: AppProps = {}) {
   };
 
   const handleDismissUnlock = useCallback(() => {
-    setUnlockingRegionId(null);
-    setCompletedRegionName(undefined);
-  }, []);
+    dismissUnlock();
+  }, [dismissUnlock]);
+
+  // El modal de victoria espera un momento: aparece casi al instante con fondo oscuro y
+  // tapaba la animación 3D (corredor cruzando la meta, bandera, puertas) antes de que
+  // terminara. La derrota sigue mostrándose de inmediato.
+  const showWinModal = useDelayedFlag(session.gameWon, WIN_MODAL_DELAY_MS);
 
   const handleDismissTutorial = useCallback(() => {
     if (!tutorialGameMode) return;
@@ -654,7 +659,7 @@ export default function App({ playerName, courseName, onExit }: AppProps = {}) {
       </main>
 
       <GameOverModal
-        isOpen={session.gameOver || session.gameWon}
+        isOpen={session.gameOver || showWinModal}
         isWon={session.gameWon}
         score={stats.score}
         xpGained={session.xpEarned ?? 0}
