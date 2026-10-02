@@ -73,9 +73,9 @@ src/
   data/regionsData.ts       -- REGIONS y GAME_MODES (nombres, colores, posiciones 3D)
   utils/audio.ts            -- todos los sonidos (sintetizados con WebAudio, sin archivos)
 supabase/
-  migrations/0001 a 0009    -- el historial real de la base de datos
+  migrations/0001 a 0010    -- el historial real de la base de datos (la 0010 espera ser aplicada por el usuario)
   rollbacks/*.down.sql      -- cómo deshacer cada migración
-docs/DECISIONS.md           -- los 16 ADRs, la fuente de verdad del "por qué"
+docs/DECISIONS.md           -- los 17 ADRs, la fuente de verdad del "por qué"
 ```
 
 `ThreeWorldCanvas.tsx` es, por lejos, el archivo más denso y más propenso a
