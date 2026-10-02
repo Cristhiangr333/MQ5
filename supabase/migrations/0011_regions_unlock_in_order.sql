@@ -30,7 +30,7 @@
 -- `required_xp` se deja en la tabla tal cual (puede servir para algo más
 -- adelante), pero deja de usarse para decidir el desbloqueo.
 --
--- Versiones que reemplaza (las tres con `create or replace`, misma firma):
+-- Versiones que reemplaza:
 --   get_my_progress()               <- 0005 (lo que ve el estudiante)
 --   get_course_progress_summary()   <- 0009 (lista de estudiantes del docente)
 --   get_student_level_detail()      <- 0010 (detalle del docente; su
@@ -38,9 +38,23 @@
 -- Las tres usan AHORA el mismo criterio, para que docente y estudiante
 -- siempre vean lo mismo.
 --
--- Requiere: 0001-0010 ya ejecutadas. No borra datos; solo reemplaza
--- funciones. Rollback: supabase/rollbacks/0011_*.down.sql
+-- ROBUSTEZ ante el estado previo de tu base: `create or replace` NO puede
+-- cambiar las columnas de salida de una función (error 42P13 "cannot change
+-- return type of existing function"). La primera versión de esta migración lo
+-- asumía y falló en un Supabase real donde get_course_progress_summary no
+-- tenía la forma de la 0009. Por eso get_course_progress_summary y
+-- get_student_level_detail se hacen con `drop function if exists` + `create`:
+-- funciona igual si la 0009 / 0010 ya estaban aplicadas, si estaban a medias
+-- o si no estaban. (`drop` borra los permisos, así que se vuelven a poner.)
+-- get_my_progress conserva exactamente las columnas de la 0005: create or replace.
+--
+-- Todo va en UNA transacción: o se aplica completo o no se aplica nada.
+--
+-- Requiere: 0001-0008. No borra datos; solo reemplaza funciones.
+-- Rollback: supabase/rollbacks/0011_*.down.sql
 -- =====================================================================
+
+begin;
 
 create or replace function public.get_my_progress()
 returns table (
@@ -106,7 +120,9 @@ $$;
 -- la forma que le dio 0009_teacher_detailed_progress.sql (con
 -- overall_accuracy) -- misma firma, por eso alcanza con `create or
 -- replace` en vez de volver a hacer drop + create.
-create or replace function public.get_course_progress_summary(p_course_id uuid)
+drop function if exists public.get_course_progress_summary(uuid);
+
+create function public.get_course_progress_summary(p_course_id uuid)
 returns table (
   student_id       uuid,
   first_name       text,
@@ -174,12 +190,17 @@ begin
 end;
 $$;
 
+revoke execute on function public.get_course_progress_summary(uuid) from public, anon;
+grant execute on function public.get_course_progress_summary(uuid) to authenticated;
+
 -- get_student_level_detail() (0010) calculaba `region_unlocked` por XP: con la
 -- regla nueva mostraría "bloqueada" una región que el estudiante SÍ tiene
 -- abierta (o al revés). Misma firma y mismas 11 columnas que la 0010; solo
 -- cambia cómo se decide region_unlocked. `region_required_xp` se sigue
 -- devolviendo (ya no es una llave: el front muestra "Se abre al terminar X").
-create or replace function public.get_student_level_detail(p_student_id uuid)
+drop function if exists public.get_student_level_detail(uuid);
+
+create function public.get_student_level_detail(p_student_id uuid)
 returns table (
   region_id          text,
   region_sort        smallint,
@@ -251,5 +272,10 @@ begin
 end;
 $$;
 
+revoke execute on function public.get_student_level_detail(uuid) from public, anon;
+grant execute on function public.get_student_level_detail(uuid) to authenticated;
+
 -- Recarga el caché de esquema de PostgREST (ver ADR-010).
 notify pgrst, 'reload schema';
+
+commit;

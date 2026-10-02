@@ -5,7 +5,10 @@
 --   get_course_progress_summary() -> versión de 0009 (regions_unlocked por XP)
 --   get_student_level_detail()    -> versión de 0010 (region_unlocked por XP)
 -- Definiciones extraídas con pg_get_functiondef() de una base real con
--- 0001-0010 aplicadas, no copiadas a mano.
+-- 0001-0010 aplicadas, no copiadas a mano. En una transacción; las dos funciones
+-- con `drop` + `create` (y permisos de nuevo) para no depender de su forma actual.
+
+begin;
 
 CREATE OR REPLACE FUNCTION public.get_my_progress()
  RETURNS TABLE(region_id text, region_sort smallint, region_required_xp integer, region_unlocked boolean, game_mode_id text, level_sort smallint, level_unlocked boolean, best_stars smallint, rounds_played integer)
@@ -47,7 +50,8 @@ $function$
 
 ;
 
-CREATE OR REPLACE FUNCTION public.get_course_progress_summary(p_course_id uuid)
+DROP FUNCTION IF EXISTS public.get_course_progress_summary(uuid);
+CREATE FUNCTION public.get_course_progress_summary(p_course_id uuid)
  RETURNS TABLE(student_id uuid, first_name text, last_name text, total_xp integer, regions_unlocked smallint, levels_passed smallint, rounds_played integer, overall_accuracy smallint, last_played_at timestamp with time zone)
  LANGUAGE plpgsql
  STABLE SECURITY DEFINER
@@ -96,7 +100,8 @@ $function$
 
 ;
 
-CREATE OR REPLACE FUNCTION public.get_student_level_detail(p_student_id uuid)
+DROP FUNCTION IF EXISTS public.get_student_level_detail(uuid);
+CREATE FUNCTION public.get_student_level_detail(p_student_id uuid)
  RETURNS TABLE(region_id text, region_sort smallint, game_mode_id text, level_sort smallint, unlocked boolean, best_stars smallint, rounds_played integer, correct_count integer, questions_total integer, region_unlocked boolean, region_required_xp integer)
  LANGUAGE plpgsql
  STABLE SECURITY DEFINER
@@ -155,4 +160,11 @@ $function$
 
 ;
 
+revoke execute on function public.get_course_progress_summary(uuid) from public, anon;
+grant execute on function public.get_course_progress_summary(uuid) to authenticated;
+revoke execute on function public.get_student_level_detail(uuid) from public, anon;
+grant execute on function public.get_student_level_detail(uuid) to authenticated;
+
 notify pgrst, 'reload schema';
+
+commit;
