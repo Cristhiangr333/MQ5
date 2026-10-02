@@ -6,10 +6,11 @@ import {
   fetchStudentRecentRounds,
 } from '../lib/teacherProgress';
 import { friendlyError } from '../lib/errors';
-import { isLevelLocked, isRegionLocked } from '../lib/teacherPanelUtils';
+import { isLevelLocked, isRegionLocked, sumAnswers, summarizeStudentDetail } from '../lib/teacherPanelUtils';
 import type { StudentDifficultyRow, StudentLevelDetailRow, StudentRecentRound } from '../lib/types';
 import { REGIONS, GAME_MODES } from '../data/regionsData';
 import { Spinner, ErrorBanner } from './ui';
+import { StudentAnswerSummary } from './StudentAnswerSummary';
 
 interface StudentDetailModalProps {
   studentId: string;
@@ -166,6 +167,7 @@ export function StudentDetailModal({ studentId, studentName, onClose }: StudentD
 
         {rows && (
           <div className="space-y-5">
+            <StudentAnswerSummary summary={summarizeStudentDetail(rows)} />
             {REGIONS.map((region) => {
               const regionRows = rows
                 .filter((r) => r.region_id === region.id)
@@ -185,6 +187,14 @@ export function StudentDetailModal({ studentId, studentName, onClose }: StudentD
                           : 'Región bloqueada'}
                       </span>
                     )}
+                    {(() => {
+                      const regionAnswers = sumAnswers(regionRows);
+                      return regionAnswers.total > 0 ? (
+                        <span className="ml-auto text-[11px] font-bold text-slate-300 font-['Nunito_Sans',sans-serif] shrink-0">
+                          {regionAnswers.correct} de {regionAnswers.total} correctas
+                        </span>
+                      ) : null;
+                    })()}
                   </h3>
                   <div className="grid grid-cols-1 sm:grid-cols-5 gap-2">
                     {regionRows.map((row) => {
@@ -217,8 +227,11 @@ export function StudentDetailModal({ studentId, studentName, onClose }: StudentD
                               <p className="flex items-center justify-center gap-0.5 text-[11px] text-amber-400 font-bold mt-1">
                                 {row.best_stars} <Star className="w-3 h-3 fill-amber-400" />
                               </p>
+                              <p className="text-[11px] font-bold text-slate-200 mt-0.5">
+                                {row.correct_count}/{row.questions_total} correctas
+                              </p>
                               <p className="text-[10px] text-slate-400">
-                                {accuracy}% de aciertos · {row.rounds_played}{' '}
+                                {accuracy}% · {row.rounds_played}{' '}
                                 {row.rounds_played === 1 ? 'intento' : 'intentos'}
                               </p>
                             </>
@@ -256,6 +269,9 @@ export function StudentDetailModal({ studentId, studentName, onClose }: StudentD
                                     />
                                   </div>
                                   <p className="text-[11px] font-bold text-slate-200">{pct}%</p>
+                                  <p className="text-[10px] text-slate-400">
+                                    {d?.correct_count}/{d?.questions_total} correctas
+                                  </p>
                                 </>
                               )}
                             </div>

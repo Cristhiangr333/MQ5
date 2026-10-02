@@ -16,6 +16,8 @@ import {
   isRegionLocked,
   needsAttention,
   sortStudents,
+  sumAnswers,
+  summarizeStudentDetail,
   summarizeCourse,
   timeAgo,
 } from './teacherPanelUtils.ts';
@@ -213,4 +215,33 @@ test('isRegionLocked: solo si TODA la región está cerrada y sin rondas', () =>
   assert.equal(isRegionLocked([levelRow({ region_unlocked: true })]), false);
   assert.equal(isRegionLocked([levelRow({ region_unlocked: false, rounds_played: 1 })]), false);
   assert.equal(isRegionLocked([]), false);
+});
+
+test('sumAnswers: correctas de total, falladas y porcentaje', () => {
+  assert.deepEqual(sumAnswers([]), { correct: 0, total: 0, wrong: 0, pct: null });
+  assert.deepEqual(
+    sumAnswers([
+      { correct_count: 5, questions_total: 5 },
+      { correct_count: 7, questions_total: 10 },
+    ]),
+    { correct: 12, total: 15, wrong: 3, pct: 80 },
+  );
+  // 1 de 3 = 33,3 % -> 33; 2 de 3 = 66,7 % -> 67
+  assert.equal(sumAnswers([{ correct_count: 1, questions_total: 3 }]).pct, 33);
+  assert.equal(sumAnswers([{ correct_count: 2, questions_total: 3 }]).pct, 67);
+});
+
+test('summarizeStudentDetail: totales, rondas y niveles con estrellas', () => {
+  const rows = [
+    levelRow({ correct_count: 5, questions_total: 5, rounds_played: 1, best_stars: 3 }),
+    levelRow({ correct_count: 7, questions_total: 10, rounds_played: 2, best_stars: 1 }),
+    levelRow({ correct_count: 2, questions_total: 5, rounds_played: 1, best_stars: 0 }),
+    levelRow(), // sin jugar
+  ];
+  assert.deepEqual(summarizeStudentDetail(rows), {
+    answers: { correct: 14, total: 20, wrong: 6, pct: 70 },
+    rounds: 4,
+    levelsWithStars: 2,
+  });
+  assert.deepEqual(summarizeStudentDetail([]).answers, { correct: 0, total: 0, wrong: 0, pct: null });
 });

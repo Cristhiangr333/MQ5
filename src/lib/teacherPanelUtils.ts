@@ -220,3 +220,51 @@ export function isRegionLocked(regionRows: StudentLevelDetailRow[]): boolean {
     regionRows.every((r) => r.rounds_played === 0)
   );
 }
+
+// ---------------------------------------------------------------------
+// Respuestas del estudiante: "cuántas acertó de cuántas"
+// ---------------------------------------------------------------------
+
+export interface AnswerTotals {
+  /** Preguntas respondidas bien. */
+  correct: number;
+  /** Preguntas respondidas en total (incluye los reintentos de un mismo nivel). */
+  total: number;
+  /** Preguntas falladas (total - correct). */
+  wrong: number;
+  /** % de aciertos redondeado, o null si todavía no respondió ninguna. */
+  pct: number | null;
+}
+
+/** Suma "correctas de total" de cualquier lista de filas que traiga esos dos contadores. */
+export function sumAnswers(rows: ReadonlyArray<{ correct_count: number; questions_total: number }>): AnswerTotals {
+  let correct = 0;
+  let total = 0;
+  for (const r of rows) {
+    correct += r.correct_count;
+    total += r.questions_total;
+  }
+  return {
+    correct,
+    total,
+    wrong: Math.max(0, total - correct),
+    pct: total > 0 ? Math.round((100 * correct) / total) : null,
+  };
+}
+
+export interface StudentDetailSummary {
+  answers: AnswerTotals;
+  /** Rondas jugadas en todos los niveles. */
+  rounds: number;
+  /** Niveles en los que ya ganó al menos una estrella. */
+  levelsWithStars: number;
+}
+
+/** Resumen global del estudiante a partir de sus 20 filas región × nivel. */
+export function summarizeStudentDetail(rows: StudentLevelDetailRow[]): StudentDetailSummary {
+  return {
+    answers: sumAnswers(rows),
+    rounds: rows.reduce((n, r) => n + r.rounds_played, 0),
+    levelsWithStars: rows.filter((r) => r.best_stars >= 1).length,
+  };
+}

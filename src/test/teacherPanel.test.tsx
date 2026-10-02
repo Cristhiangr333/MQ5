@@ -63,7 +63,7 @@ const PROGRESS: Record<string, unknown[]> = {
 /** Conecta el mock de Supabase con una "base" en memoria para las tablas que usa el panel. */
 function wireSupabase(
   db: Db,
-  opts: { progressError?: boolean; progress?: Record<string, unknown[]>; levelRows?: unknown[] } = {},
+  opts: { progressError?: boolean; progress?: Record<string, unknown[]>; levelRows?: unknown[]; difficultyRows?: unknown[] } = {},
 ) {
   mock.setSession({ user: { id: 't1', is_anonymous: false } });
   mock.client.rpc.mockImplementation(async (fn: string, params?: Record<string, unknown>) => {
@@ -73,6 +73,7 @@ function wireSupabase(
       return { data: (opts.progress ?? PROGRESS)[String(params?.p_course_id)] ?? [], error: null };
     }
     if (fn === 'get_student_level_detail') return { data: opts.levelRows ?? [], error: null };
+    if (fn === 'get_student_difficulty_breakdown') return { data: opts.difficultyRows ?? [], error: null };
     return { data: [], error: null };
   });
 
@@ -377,6 +378,50 @@ describe('TeacherPanel · detalle del estudiante', () => {
     expect(within(dialog).queryByText('Región bloqueada')).not.toBeInTheDocument();
     // Solo la regla vieja: Bosque 3 + Montaña 4 + Ciudad 4 + Castillo 4 bloqueados.
     expect(within(dialog).getAllByText('Bloqueado')).toHaveLength(3 + 4 + 4 + 4);
+  });
+
+  test('muestra cuántas preguntas acertó de cuántas: total, por región, por nivel y por dificultad', async () => {
+    const user = userEvent.setup({ advanceTimers: () => undefined });
+    const levelRows = levelRowsForAna(true).map((r) =>
+      // Bosque · Batalla: 2 intentos, 7 de 10 (se suma a la Carrera: 5 de 5).
+      r.region_id === 'bosque' && r.game_mode_id === 'battle'
+        ? { ...r, rounds_played: 2, best_stars: 1, correct_count: 7, questions_total: 10 }
+        : r,
+    );
+    const difficultyRows = [
+      { region_id: 'bosque', difficulty: 1, correct_count: 9, questions_total: 10 },
+      { region_id: 'bosque', difficulty: 2, correct_count: 3, questions_total: 5 },
+    ];
+    wireSupabase(seedDb(), { levelRows, difficultyRows });
+    await renderPanel();
+    const dialog = await openAnaDetail(user);
+
+    const summary = await within(dialog).findByRole('group', { name: 'Resumen de respuestas' });
+    expect(summary).toHaveTextContent('Acertó 12 de 15 preguntas');
+    expect(summary).toHaveTextContent('80%');
+    expect(summary).toHaveTextContent('3 falladas');
+    expect(summary).toHaveTextContent('3 rondas jugadas');
+    expect(summary).toHaveTextContent('2 niveles con estrellas');
+
+    // Total de la región, y conteo por nivel y por dificultad (no solo porcentajes).
+    expect(within(dialog).getByText('12 de 15 correctas')).toBeInTheDocument();
+    expect(within(dialog).getByText('5/5 correctas')).toBeInTheDocument();
+    expect(within(dialog).getByText('7/10 correctas')).toBeInTheDocument();
+    expect(within(dialog).getByText('9/10 correctas')).toBeInTheDocument();
+    expect(within(dialog).getByText('3/5 correctas')).toBeInTheDocument();
+  });
+
+  test('si el estudiante aún no respondió nada: lo dice en vez de mostrar 0 de 0', async () => {
+    const user = userEvent.setup({ advanceTimers: () => undefined });
+    const noPlay = levelRowsForAna(true).map((r) => ({
+      ...r, best_stars: 0, rounds_played: 0, correct_count: 0, questions_total: 0,
+    }));
+    wireSupabase(seedDb(), { levelRows: noPlay });
+    await renderPanel();
+    const dialog = await openAnaDetail(user);
+    const summary = await within(dialog).findByRole('group', { name: 'Resumen de respuestas' });
+    expect(summary).toHaveTextContent('Todavía no ha respondido preguntas.');
+    expect(within(dialog).queryByText(/de 0/)).not.toBeInTheDocument();
   });
 
   test('Escape cierra el detalle y el foco vuelve al botón que lo abrió', async () => {
