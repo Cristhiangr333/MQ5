@@ -61,7 +61,10 @@ const PROGRESS: Record<string, unknown[]> = {
 };
 
 /** Conecta el mock de Supabase con una "base" en memoria para las tablas que usa el panel. */
-function wireSupabase(db: Db, opts: { progressError?: boolean; progress?: Record<string, unknown[]> } = {}) {
+function wireSupabase(
+  db: Db,
+  opts: { progressError?: boolean; progress?: Record<string, unknown[]>; levelRows?: unknown[] } = {},
+) {
   mock.setSession({ user: { id: 't1', is_anonymous: false } });
   mock.client.rpc.mockImplementation(async (fn: string, params?: Record<string, unknown>) => {
     if (fn === 'get_my_role') return { data: 'teacher', error: null };
@@ -69,6 +72,7 @@ function wireSupabase(db: Db, opts: { progressError?: boolean; progress?: Record
       if (opts.progressError) return { data: null, error: { message: 'boom' } };
       return { data: (opts.progress ?? PROGRESS)[String(params?.p_course_id)] ?? [], error: null };
     }
+    if (fn === 'get_student_level_detail') return { data: opts.levelRows ?? [], error: null };
     return { data: [], error: null };
   });
 
@@ -308,6 +312,100 @@ describe('TeacherPanel · resumen del curso', () => {
     await openCourseDetails(user);
     await screen.findByRole('alert');
     expect(screen.queryByRole('group', { name: 'Resumen del curso' })).not.toBeInTheDocument();
+  });
+});
+
+const REGION_IDS = ['bosque', 'montana', 'ciudad', 'castillo'];
+const MODE_IDS = ['race', 'battle', 'bridge', 'shop', 'detective'];
+const REQUIRED_XP: Record<string, number> = { bosque: 0, montana: 50, ciudad: 150, castillo: 300 };
+
+/**
+ * Detalle de Ana (60 XP): pasó la Carrera del Bosque. Con `withRegionCols` incluye las
+ * columnas de la migración 0010 (Montaña abierta; Ciudad y Castillo cerradas por XP).
+ */
+function levelRowsForAna(withRegionCols: boolean) {
+  const rows: Array<Record<string, unknown>> = [];
+  REGION_IDS.forEach((region, ri) => {
+    MODE_IDS.forEach((mode, mi) => {
+      const playedHere = region === 'bosque' && mode === 'race';
+      const row: Record<string, unknown> = {
+        region_id: region, region_sort: ri + 1, game_mode_id: mode, level_sort: mi + 1,
+        // Regla "de siempre": nivel 1 abierto; el 2 del Bosque abierto porque pasó el 1.
+        unlocked: mi === 0 || (region === 'bosque' && mi === 1),
+        best_stars: playedHere ? 3 : 0, rounds_played: playedHere ? 1 : 0,
+        correct_count: playedHere ? 5 : 0, questions_total: playedHere ? 5 : 0,
+      };
+      if (withRegionCols) {
+        row.region_unlocked = ri <= 1; // 60 XP: Bosque y Montaña sí; Ciudad y Castillo no
+        row.region_required_xp = REQUIRED_XP[region];
+      }
+      rows.push(row);
+    });
+  });
+  return rows;
+}
+
+describe('TeacherPanel · detalle del estudiante', () => {
+  async function openAnaDetail(user: ReturnType<typeof userEvent.setup>) {
+    await openCourseDetails(user);
+    await user.click(await screen.findByText(/120 XP/));
+    return screen.findByRole('dialog');
+  }
+
+  test('con la migración 0010: las regiones cerradas por XP se ven bloqueadas y dicen cuánto falta', async () => {
+    const user = userEvent.setup({ advanceTimers: () => undefined });
+    wireSupabase(seedDb(), { levelRows: levelRowsForAna(true) });
+    await renderPanel();
+    const dialog = await openAnaDetail(user);
+
+    expect(await within(dialog).findByText('Se abre con 150 XP')).toBeInTheDocument();
+    expect(within(dialog).getByText('Se abre con 300 XP')).toBeInTheDocument();
+    // La Montaña (abierta por XP) NO muestra candado de región.
+    expect(within(dialog).queryByText('Se abre con 50 XP')).not.toBeInTheDocument();
+    // Bosque: 3 bloqueados (niveles 3-5); Montaña: 4 (niveles 2-5); Ciudad y Castillo: 5 + 5.
+    expect(within(dialog).getAllByText('Bloqueado')).toHaveLength(3 + 4 + 5 + 5);
+  });
+
+  test('sin la migración 0010 (campos ausentes): se comporta exactamente como antes', async () => {
+    const user = userEvent.setup({ advanceTimers: () => undefined });
+    wireSupabase(seedDb(), { levelRows: levelRowsForAna(false) });
+    await renderPanel();
+    const dialog = await openAnaDetail(user);
+
+    await within(dialog).findByText('Bosque de la Suma');
+    expect(within(dialog).queryByText(/Se abre con/)).not.toBeInTheDocument();
+    expect(within(dialog).queryByText('Región bloqueada')).not.toBeInTheDocument();
+    // Solo la regla vieja: Bosque 3 + Montaña 4 + Ciudad 4 + Castillo 4 bloqueados.
+    expect(within(dialog).getAllByText('Bloqueado')).toHaveLength(3 + 4 + 4 + 4);
+  });
+
+  test('Escape cierra el detalle y el foco vuelve al botón que lo abrió', async () => {
+    const user = userEvent.setup({ advanceTimers: () => undefined });
+    wireSupabase(seedDb(), { levelRows: levelRowsForAna(true) });
+    await renderPanel();
+    await openCourseDetails(user);
+    const opener = (await screen.findByText(/120 XP/)).closest('button') as HTMLButtonElement;
+    await user.click(opener);
+
+    const dialog = await screen.findByRole('dialog', { name: 'Progreso de Ana López' });
+    expect(within(dialog).getByRole('button', { name: 'Cerrar' })).toHaveFocus();
+
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(opener).toHaveFocus();
+  });
+
+  test('Tab no saca el foco del detalle', async () => {
+    const user = userEvent.setup({ advanceTimers: () => undefined });
+    wireSupabase(seedDb(), { levelRows: levelRowsForAna(true) });
+    await renderPanel();
+    const dialog = await openAnaDetail(user);
+    const close = within(dialog).getByRole('button', { name: 'Cerrar' });
+    await user.tab();
+    expect(dialog.contains(document.activeElement)).toBe(true);
+    await user.tab({ shift: true });
+    expect(dialog.contains(document.activeElement)).toBe(true);
+    expect(close).toBeInTheDocument();
   });
 });
 

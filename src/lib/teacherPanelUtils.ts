@@ -6,7 +6,7 @@
  * ejecuta `node --experimental-strip-types`, que no resuelve imports de valores
  * hacia módulos con extensiones o dependencias del bundler.
  */
-import type { StudentProgressSummary, StudentRow } from './types.ts';
+import type { StudentLevelDetailRow, StudentProgressSummary, StudentRow } from './types.ts';
 
 // ---------------------------------------------------------------------
 // CSV
@@ -193,4 +193,30 @@ export function summarizeCourse(
     inactive,
     lowAccuracy,
   };
+}
+
+// ---------------------------------------------------------------------
+// Detalle por estudiante
+// ---------------------------------------------------------------------
+
+/**
+ * ¿Se muestra el nivel como "Bloqueado" al docente?
+ *  - Nivel anterior sin pasar (regla de siempre), o
+ *  - su región sigue cerrada por XP (migración 0010) y no tiene rondas ahí.
+ *
+ * Si hay rondas jugadas nunca se oculta el dato, aunque la región figure cerrada.
+ * Si `region_unlocked` no llega (0010 sin aplicar) rige solo la regla de siempre.
+ */
+export function isLevelLocked(row: StudentLevelDetailRow): boolean {
+  if (!row.unlocked) return true;
+  return row.region_unlocked === false && row.rounds_played === 0;
+}
+
+/** ¿La región entera está cerrada para este estudiante (sin ninguna ronda jugada en ella)? */
+export function isRegionLocked(regionRows: StudentLevelDetailRow[]): boolean {
+  return (
+    regionRows.length > 0 &&
+    regionRows.every((r) => r.region_unlocked === false) &&
+    regionRows.every((r) => r.rounds_played === 0)
+  );
 }

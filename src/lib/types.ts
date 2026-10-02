@@ -50,6 +50,14 @@ export interface StudentLevelDetailRow {
   rounds_played: number;
   correct_count: number;
   questions_total: number;
+  /**
+   * Migración 0010: ¿su XP total alcanza para abrir esta región? Opcional a propósito:
+   * si la 0010 aún no se aplicó en Supabase, estos campos no llegan y el front se
+   * comporta como antes (ver isLevelLocked).
+   */
+  region_unlocked?: boolean;
+  /** Migración 0010: XP necesario para abrir la región (para mostrarlo al docente). */
+  region_required_xp?: number;
 }
 
 /** Fila de get_student_difficulty_breakdown(): precisión por región y dificultad (1-3). */

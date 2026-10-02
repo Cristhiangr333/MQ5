@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { X, Lock, Star, TrendingUp, Clock } from 'lucide-react';
 import {
   fetchStudentLevelDetail,
@@ -6,6 +6,7 @@ import {
   fetchStudentRecentRounds,
 } from '../lib/teacherProgress';
 import { friendlyError } from '../lib/errors';
+import { isLevelLocked, isRegionLocked } from '../lib/teacherPanelUtils';
 import type { StudentDifficultyRow, StudentLevelDetailRow, StudentRecentRound } from '../lib/types';
 import { REGIONS, GAME_MODES } from '../data/regionsData';
 import { Spinner, ErrorBanner } from './ui';
@@ -34,6 +35,54 @@ export function StudentDetailModal({ studentId, studentName, onClose }: StudentD
   const [difficultyRows, setDifficultyRows] = useState<StudentDifficultyRow[] | null>(null);
   const [recentRounds, setRecentRounds] = useState<StudentRecentRound[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  // Ref para que el efecto de teclado no se reinicie cada vez que el padre re-renderiza
+  // (onClose llega como flecha nueva en cada render y movería el foco otra vez).
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
+  // Accesibilidad de diálogo modal: foco dentro, Escape cierra, Tab no se escapa,
+  // y al cerrar el foco vuelve al botón que lo abrió.
+  useEffect(() => {
+    const opener = document.activeElement as HTMLElement | null;
+    closeButtonRef.current?.focus();
+
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        onCloseRef.current();
+        return;
+      }
+      if (e.key !== 'Tab') return;
+      const focusable = Array.from(
+        dialogRef.current?.querySelectorAll<HTMLElement>('button:not([disabled]), [href], input, select, textarea, [tabindex]:not([tabindex="-1"])') ?? [],
+      );
+      if (focusable.length === 0) {
+        e.preventDefault();
+        return;
+      }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const active = document.activeElement;
+      if (!dialogRef.current?.contains(active)) {
+        e.preventDefault();
+        first.focus();
+      } else if (e.shiftKey && active === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && active === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
+
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      opener?.focus?.();
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -89,13 +138,15 @@ export function StudentDetailModal({ studentId, studentName, onClose }: StudentD
       <div
         className="bg-slate-900 border border-slate-700 rounded-3xl w-full max-w-2xl max-h-[85vh] overflow-y-auto p-5 sm:p-7 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
-        aria-label={`Progreso de ${studentName}`}
+        aria-labelledby="student-detail-title"
       >
         <div className="flex items-center justify-between gap-3 mb-5">
-          <h2 className="text-xl font-extrabold font-['Baloo_2'] truncate">Progreso de {studentName}</h2>
+          <h2 id="student-detail-title" className="text-xl font-extrabold font-['Baloo_2'] truncate">Progreso de {studentName}</h2>
           <button
+            ref={closeButtonRef}
             onClick={onClose}
             className="min-w-10 min-h-10 rounded-xl bg-slate-800 hover:bg-slate-700 flex items-center justify-center shrink-0"
             aria-label="Cerrar"
@@ -126,18 +177,27 @@ export function StudentDetailModal({ studentId, studentName, onClose }: StudentD
                   <h3 className="text-sm font-extrabold font-['Baloo_2'] mb-2 flex items-center gap-1.5">
                     <span>{region.icon}</span>
                     <span>{region.name}</span>
+                    {isRegionLocked(regionRows) && (
+                      <span className="flex items-center gap-1 text-[11px] font-bold text-slate-400 font-['Nunito_Sans',sans-serif]">
+                        <Lock className="w-3 h-3" aria-hidden="true" />
+                        {regionRows[0].region_required_xp !== undefined
+                          ? `Se abre con ${regionRows[0].region_required_xp} XP`
+                          : 'Región bloqueada'}
+                      </span>
+                    )}
                   </h3>
                   <div className="grid grid-cols-1 sm:grid-cols-5 gap-2">
                     {regionRows.map((row) => {
                       const mode = GAME_MODES.find((g) => g.id === row.game_mode_id);
                       const accuracy =
                         row.questions_total > 0 ? Math.round((row.correct_count / row.questions_total) * 100) : null;
+                      const locked = isLevelLocked(row);
 
                       return (
                         <div
                           key={row.game_mode_id}
                           className={`rounded-xl border p-2.5 text-center ${
-                            !row.unlocked
+                            locked
                               ? 'bg-slate-950/60 border-slate-800 opacity-60'
                               : 'bg-slate-800/70 border-slate-700'
                           }`}
@@ -146,7 +206,7 @@ export function StudentDetailModal({ studentId, studentName, onClose }: StudentD
                           <p className="text-[11px] font-bold text-slate-200 leading-tight mt-0.5">
                             {mode?.name.replace(' Matemática', '').replace('Construye el ', '') ?? row.game_mode_id}
                           </p>
-                          {!row.unlocked ? (
+                          {locked ? (
                             <p className="flex items-center justify-center gap-1 text-[10px] text-slate-500 mt-1">
                               <Lock className="w-3 h-3" /> Bloqueado
                             </p>

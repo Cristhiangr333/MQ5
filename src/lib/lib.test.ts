@@ -12,12 +12,14 @@ import {
   csvCell,
   csvFileName,
   hasLowAccuracy,
+  isLevelLocked,
+  isRegionLocked,
   needsAttention,
   sortStudents,
   summarizeCourse,
   timeAgo,
 } from './teacherPanelUtils.ts';
-import type { StudentProgressSummary, StudentRow } from './types.ts';
+import type { StudentLevelDetailRow, StudentProgressSummary, StudentRow } from './types.ts';
 
 test('normalizeCourseCode: mayúsculas, sin símbolos, máx. 5', () => {
   assert.equal(normalizeCourseCode('ab-c d2'), 'ABCD2');
@@ -186,4 +188,29 @@ test('summarizeCourse: curso sin datos no inventa promedio', () => {
   assert.deepEqual(summarizeCourse([student('a', 'Ana')], [], NOW), {
     students: 1, played: 0, avgAccuracy: null, inactive: 0, lowAccuracy: 0,
   });
+});
+
+function levelRow(over: Partial<StudentLevelDetailRow> = {}): StudentLevelDetailRow {
+  return {
+    region_id: 'ciudad', region_sort: 3, game_mode_id: 'race', level_sort: 1, unlocked: true,
+    best_stars: 0, rounds_played: 0, correct_count: 0, questions_total: 0, ...over,
+  };
+}
+
+test('isLevelLocked: regla vieja, región cerrada por XP, y sin datos de 0010', () => {
+  assert.equal(isLevelLocked(levelRow({ unlocked: false })), true); // nivel anterior sin pasar
+  assert.equal(isLevelLocked(levelRow()), false); // sin 0010: como siempre
+  assert.equal(isLevelLocked(levelRow({ region_unlocked: true })), false);
+  assert.equal(isLevelLocked(levelRow({ region_unlocked: false })), true); // región cerrada por XP
+  // Con rondas jugadas nunca se oculta el dato, aunque la región figure cerrada:
+  assert.equal(isLevelLocked(levelRow({ region_unlocked: false, rounds_played: 2 })), false);
+});
+
+test('isRegionLocked: solo si TODA la región está cerrada y sin rondas', () => {
+  const closed = [levelRow({ region_unlocked: false }), levelRow({ region_unlocked: false, level_sort: 2, unlocked: false })];
+  assert.equal(isRegionLocked(closed), true);
+  assert.equal(isRegionLocked([levelRow()]), false); // sin 0010
+  assert.equal(isRegionLocked([levelRow({ region_unlocked: true })]), false);
+  assert.equal(isRegionLocked([levelRow({ region_unlocked: false, rounds_played: 1 })]), false);
+  assert.equal(isRegionLocked([]), false);
 });
