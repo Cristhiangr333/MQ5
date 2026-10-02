@@ -73,9 +73,9 @@ src/
   data/regionsData.ts       -- REGIONS y GAME_MODES (nombres, colores, posiciones 3D)
   utils/audio.ts            -- todos los sonidos (sintetizados con WebAudio, sin archivos)
 supabase/
-  migrations/0001 a 0010    -- el historial real de la base de datos (la 0010 espera ser aplicada por el usuario)
+  migrations/0001 a 0011    -- el historial real de la base de datos (0010 y 0011 esperan ser aplicadas por el usuario)
   rollbacks/*.down.sql      -- cómo deshacer cada migración
-docs/DECISIONS.md           -- los 17 ADRs, la fuente de verdad del "por qué"
+docs/DECISIONS.md           -- los 18 ADRs, la fuente de verdad del "por qué"
 ```
 
 `ThreeWorldCanvas.tsx` es, por lejos, el archivo más denso y más propenso a
@@ -145,6 +145,7 @@ merges fueron limpios hasta ahora, pero:
 - **`src/test/app.test.tsx` no cubre el loop de juego real** (responder
   preguntas, terminar ronda, desbloquear nivel) — solo Landing, StudentEntry,
   TeacherAccess, TeacherPanel. Document como hueco real, no como cubierto.
+- **Regla de islas (ADR-018):** una isla se abre al COMPLETAR la anterior, no por XP. Migraciones 0010 y 0011 sin aplicar en producción; antes de la 0011 correr `supabase/checks/0011_impact_check.sql`.
 - **Reset de visuales de victoria/derrota solo cubre "entrar a un nivel
   nuevo"**, no todos los casos de "Reintentar" el mismo nivel — revisar si
   ADR-016 ya lo resolvió también para retry o si sigue pendiente, antes de
