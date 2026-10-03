@@ -4,7 +4,8 @@ import { IllustratedWorldViewport } from './IllustratedWorldViewport';
 import { DynamicParticleSystem } from './DynamicParticleSystem';
 import { WeatherOverlay, getWeatherInfo, WeatherIntensity } from './WeatherOverlay';
 import { GalaxyUnlockOverlay } from './GalaxyUnlockOverlay';
-import { GameMode, MathQuestion, RegionDefinition } from '../types';
+import { UniverseCompleteOverlay } from './UniverseCompleteOverlay';
+import { GameMode, MathQuestion, RegionDefinition, RegionProgress } from '../types';
 import { REGIONS } from '../data/regionsData';
 import { Eye, Layers, Compass, ArrowLeft } from 'lucide-react';
 
@@ -31,6 +32,16 @@ interface WorldViewportProps {
   unlockingRegionId?: string | null;
   previousRegionName?: string;
   onDismissUnlock?: () => void;
+  /**
+   * Gran Final "universo completado". Si viene (no null), se muestra encima del mapa y los
+   * dos motores dibujan su versión (3D o ilustrada). Sin esta prop todo funciona como antes.
+   */
+  universeFinale?: {
+    regions: RegionProgress[];
+    totalXp: number;
+    onExplore: () => void;
+    onReplay: () => void;
+  } | null;
 }
 
 export const WorldViewport: React.FC<WorldViewportProps> = ({
@@ -55,6 +66,7 @@ export const WorldViewport: React.FC<WorldViewportProps> = ({
   unlockingRegionId,
   previousRegionName,
   onDismissUnlock,
+  universeFinale,
 }) => {
   // Engine: 'three' (WebGL 3D) es el modo PRINCIPAL. 'illustrated' es el
   // respaldo si el navegador no soporta WebGL o el docente lo prefiere.
@@ -212,6 +224,7 @@ export const WorldViewport: React.FC<WorldViewportProps> = ({
           gameOver={gameOver}
           onSelectRegion={onSelectRegion}
           unlockingRegionId={unlockingRegionId}
+          universeFinaleActive={!!universeFinale}
           onWebGLError={() => {
             setWebGLError(true);
             setEngine('illustrated');
@@ -236,12 +249,24 @@ export const WorldViewport: React.FC<WorldViewportProps> = ({
           gameOver={gameOver}
           activeQuestion={activeQuestion}
           onSelectRegion={onSelectRegion}
+          universeFinaleActive={!!universeFinale}
+        />
+      )}
+
+      {/* Gran Final "universo completado" (sobre cualquiera de los dos motores, 3D o ilustrado) */}
+      {viewMode === 'map' && universeFinale && (
+        <UniverseCompleteOverlay
+          regions={universeFinale.regions}
+          totalXp={universeFinale.totalXp}
+          onExplore={universeFinale.onExplore}
+          onReplay={universeFinale.onReplay}
+          onPlayRegion={onSelectRegion}
         />
       )}
 
       {/* Celebración "Mario Galaxy" de región recién desbloqueada (sobre
           cualquiera de los dos motores, 3D o ilustrado) */}
-      {viewMode === 'map' && unlockingRegionId && (
+      {viewMode === 'map' && unlockingRegionId && !universeFinale && (
         <GalaxyUnlockOverlay
           key={unlockingRegionId} // si hay varias celebraciones en cola, cada una arranca desde cero
           region={REGIONS.find((r) => r.id === unlockingRegionId) || REGIONS[0]}

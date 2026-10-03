@@ -2,6 +2,13 @@ import React, { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { REGIONS } from '../data/regionsData';
 import { GameMode } from '../types';
+import {
+  createUniverseFinaleFX,
+  disposeUniverseFinaleFX,
+  universeFinaleCamera,
+  updateUniverseFinaleFX,
+} from './universeFinaleFX';
+import type { UniverseFinaleFX } from './universeFinaleFX';
 
 /** Cómo se ve un mesh "en reposo": lo que hace falta para volver ahí después
  * de una animación de victoria/derrota, sin conocer de antemano qué mesh es
@@ -69,6 +76,8 @@ interface ThreeWorldCanvasProps {
   onWebGLError?: () => void;
   /** Id de la región recién desbloqueada mientras dura la celebración 3D (null = ninguna). */
   unlockingRegionId?: string | null;
+  /** Gran Final "universo completado" activo: monta el FX 3D y la cámara cinematográfica en el mapa. */
+  universeFinaleActive?: boolean;
 }
 
 // ==========================================
@@ -832,6 +841,7 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
   onSelectRegion,
   onWebGLError,
   unlockingRegionId,
+  universeFinaleActive,
 }) => {
   const mountRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
@@ -848,6 +858,11 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
   unlockingRegionIdRef.current = unlockingRegionId;
   const galaxyUnlockFXRef = useRef<GalaxyUnlockFXData | null>(null);
   const galaxyUnlockStartTimeRef = useRef<number>(0);
+  // Gran Final "universo completado" (FX en universeFinaleFX.ts)
+  const universeFinaleActiveRef = useRef<boolean | undefined>(universeFinaleActive);
+  universeFinaleActiveRef.current = universeFinaleActive;
+  const universeFinaleFXRef = useRef<UniverseFinaleFX | null>(null);
+  const universeFinaleStartTimeRef = useRef<number>(0);
   const isCorrectRef = useRef(isCorrect);
   isCorrectRef.current = isCorrect;
   const gameWonRef = useRef(gameWon);
@@ -1207,6 +1222,12 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
 
     const handlePointerUp = (e: MouseEvent | TouchEvent) => {
       isDragging.current = false;
+
+      // Durante el Gran Final los toques los gestiona su overlay. Este manejador está en
+      // `window`, así que recibe TODO soltar-clic de la página (también el de los botones
+      // del overlay): sin esta guarda, pulsar "Explorar" sobre la silueta de una isla
+      // entraría a un nivel por error.
+      if (universeFinaleActiveRef.current) return;
 
       // Mientras la celebración de región desbloqueada está activa, tocar
       // en cualquier parte del mapa lanza directo esa región.
@@ -3373,6 +3394,37 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
     };
   }, [viewMode, unlockingRegionId]);
 
+  // Montar/desmontar el FX 3D del Gran Final "universo completado". Efecto aparte y liviano,
+  // igual que el del desbloqueo de región: solo crea/destruye su propio grupo, no reconstruye
+  // la escena. Se libera con disposeUniverseFinaleFX (la limpieza genérica de arriba solo
+  // recorre Mesh y dejaría sin liberar los meteoros y el polvo estelar).
+  useEffect(() => {
+    if (!sceneRef.current) return;
+
+    if (universeFinaleFXRef.current) {
+      sceneRef.current.remove(universeFinaleFXRef.current.group);
+      disposeUniverseFinaleFX(universeFinaleFXRef.current);
+      universeFinaleFXRef.current = null;
+    }
+
+    if (viewMode === 'map' && universeFinaleActive) {
+      const fx = createUniverseFinaleFX(
+        REGIONS.map((r) => ({ id: r.id, position: r.islandPosition, color: r.themeColor })),
+      );
+      sceneRef.current.add(fx.group);
+      universeFinaleFXRef.current = fx;
+      universeFinaleStartTimeRef.current = performance.now();
+    }
+
+    return () => {
+      if (universeFinaleFXRef.current && sceneRef.current) {
+        sceneRef.current.remove(universeFinaleFXRef.current.group);
+        disposeUniverseFinaleFX(universeFinaleFXRef.current);
+        universeFinaleFXRef.current = null;
+      }
+    };
+  }, [viewMode, universeFinaleActive]);
+
   // Update Dynamic Bridge Segments and advance walker when bridgeBuiltSegments changes
   useEffect(() => {
     if (gameMode !== 'bridge' || !bridgeSegmentsGroupRef.current) return;
@@ -4309,7 +4361,13 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
       // Smooth camera motion
       if (cameraRef.current) {
         if (viewMode === 'map') {
-          if (unlockingRegionIdRef.current) {
+          if (universeFinaleActiveRef.current) {
+            // Gran Final: barrido, acercamiento a la Gran Estrella y órbita libre.
+            const finaleElapsed = (performance.now() - universeFinaleStartTimeRef.current) / 1000;
+            const cam = universeFinaleCamera(finaleElapsed, mapRotationAngle.current + time * 0.035);
+            targetCamPos.current.set(...cam.pos);
+            targetCamLookAt.current.set(...cam.look);
+          } else if (unlockingRegionIdRef.current) {
             // Zoom cinematográfico "Mario Galaxy": acercamiento suave a la
             // isla de la región recién desbloqueada, en vez de la órbita.
             const targetDef = REGIONS.find((r) => r.id === unlockingRegionIdRef.current);
@@ -4325,11 +4383,16 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
             const cx = Math.sin(currentAngle) * orbitRadius;
             const cz = Math.cos(currentAngle) * orbitRadius;
             targetCamPos.current.set(cx, 16, cz);
+            // La órbita normal solo fijaba la POSICIÓN: tras el zoom a una isla desbloqueada (o
+            // tras el Gran Final) la mirada se quedaba apuntando a ese punto. Se restaura la
+            // mirada por defecto del mapa (la misma que se fija al construir la escena).
+            targetCamLookAt.current.set(0, 1.0, 0);
           }
         }
 
-        const camLerp = unlockingRegionIdRef.current ? 0.045 : 0.06;
-        const lookLerp = unlockingRegionIdRef.current ? 0.06 : 0.08;
+        const cinematic = universeFinaleActiveRef.current || unlockingRegionIdRef.current;
+        const camLerp = cinematic ? 0.045 : 0.06;
+        const lookLerp = cinematic ? 0.06 : 0.08;
         cameraRef.current.position.lerp(targetCamPos.current, camLerp);
         currentCamLookAt.current.lerp(targetCamLookAt.current, lookLerp);
         cameraRef.current.lookAt(currentCamLookAt.current);
@@ -4391,6 +4454,12 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
         // Flecha flotante indicando dónde tocar
         fx.pointerGroup.position.y = 3.6 + Math.sin(time * 4) * 0.25;
         fx.pointerGroup.rotation.y = time * 2;
+      }
+
+      // Animación del Gran Final "universo completado"
+      if (universeFinaleFXRef.current) {
+        const finaleElapsed = (performance.now() - universeFinaleStartTimeRef.current) / 1000;
+        updateUniverseFinaleFX(universeFinaleFXRef.current, time, delta, finaleElapsed);
       }
 
       // Gentle cloud and sky dome drifting
@@ -4863,7 +4932,7 @@ export const ThreeWorldCanvas: React.FC<ThreeWorldCanvasProps> = ({
       <div ref={mountRef} className="w-full h-full cursor-grab active:cursor-grabbing" />
 
       {/* Floating 3D Navigation Controls Overlay */}
-      {viewMode === 'map' && (
+      {viewMode === 'map' && !universeFinaleActive && (
         <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-slate-900/80 backdrop-blur-md px-4 py-1.5 rounded-full border border-slate-700/60 text-xs text-slate-300 pointer-events-none">
           <span>🔄 Arrastra para girar el mapa 3D</span>
           <span className="text-slate-500">·</span>

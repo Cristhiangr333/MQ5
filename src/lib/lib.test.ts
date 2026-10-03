@@ -22,6 +22,7 @@ import {
   timeAgo,
 } from './teacherPanelUtils.ts';
 import { detectNewlyUnlocked, enqueueUnlocks, previousRegionOf } from './unlocks.ts';
+import { didCompleteUniverse, isUniverseComplete, regionStarTotals } from './universe.ts';
 import type { StudentLevelDetailRow, StudentProgressSummary, StudentRow } from './types.ts';
 
 test('normalizeCourseCode: mayúsculas, sin símbolos, máx. 5', () => {
@@ -284,4 +285,34 @@ test('previousRegionOf: la región que hay que completar para abrir esta', () =>
   assert.equal(previousRegionOf(regs, 0), undefined);
   assert.equal(previousRegionOf(regs, 1), 'Bosque');
   assert.equal(previousRegionOf(regs, 2), 'Montaña');
+});
+
+// ---------------------------------------------------------------------
+// Universo completado (universe)
+// ---------------------------------------------------------------------
+
+const uReg = (stars: number[]) => ({ levels: stars.map((s) => ({ bestStars: s })) });
+const FULL = [uReg([3, 2, 1, 3, 3]), uReg([1, 1, 1, 1, 1]), uReg([3, 3, 3, 3, 3]), uReg([2, 2, 2, 2, 2])];
+
+test('isUniverseComplete: solo con las 4 regiones y sus 5 niveles pasados', () => {
+  assert.equal(isUniverseComplete(FULL), true);
+  assert.equal(isUniverseComplete([]), false); // aún sin cargar: no se afirma nada
+  assert.equal(isUniverseComplete([uReg([])]), false); // región sin niveles
+  // Un solo nivel sin pasar (0 estrellas) lo impide:
+  assert.equal(isUniverseComplete([...FULL.slice(0, 3), uReg([2, 2, 2, 2, 0])]), false);
+  // Falta la última región completa:
+  assert.equal(isUniverseComplete([...FULL.slice(0, 3), uReg([0, 0, 0, 0, 0])]), false);
+});
+
+test('didCompleteUniverse: solo en la TRANSICIÓN, no si ya estaba completo', () => {
+  const almost = [...FULL.slice(0, 3), uReg([2, 2, 2, 2, 0])];
+  assert.equal(didCompleteUniverse(almost, FULL), true); // la ronda que lo completó
+  assert.equal(didCompleteUniverse(FULL, FULL), false); // rejugar un nivel ya completo
+  assert.equal(didCompleteUniverse(almost, almost), false);
+  assert.equal(didCompleteUniverse([], FULL), true); // (primera carga ya completa: ver App, no ocurre en finishRound)
+});
+
+test('regionStarTotals: estrellas ganadas de las posibles', () => {
+  assert.deepEqual(regionStarTotals(uReg([3, 2, 1, 3, 3])), { stars: 12, max: 15 });
+  assert.deepEqual(regionStarTotals(uReg([])), { stars: 0, max: 0 });
 });

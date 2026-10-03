@@ -12,6 +12,8 @@ import { GameModeTutorial } from './components/GameModeTutorial';
 import { PauseModal } from './components/PauseModal';
 import { detectNewlyUnlocked } from './lib/unlocks';
 import { useUnlockCelebrations } from './lib/useUnlockCelebrations';
+import { didCompleteUniverse, isUniverseComplete } from './lib/universe';
+import { useUniverseFinale } from './lib/useUniverseFinale';
 import { useDelayedFlag } from './lib/useDelayedFlag';
 import { Play, Compass, LogOut, Loader2, AlertTriangle } from 'lucide-react';
 
@@ -99,6 +101,11 @@ export default function App({ playerName, courseName, onExit }: AppProps = {}) {
   const [totalXp, setTotalXp] = useState(0);
   const [progressLoading, setProgressLoading] = useState(true);
   const [progressError, setProgressError] = useState<string | null>(null);
+  // Un REFRESCO del progreso (después de guardar una ronda) falló: el progreso en pantalla
+  // puede estar desactualizado. No tumba el juego; solo se avisa (ver loadProgress).
+  const [progressStale, setProgressStale] = useState(false);
+  // Se incrementa para forzar una escena 3D nueva al rejugar el MISMO nivel (ver initLevelSession).
+  const [worldKey, setWorldKey] = useState(0);
 
   const [currentRegionId, setCurrentRegionId] = useState<string>('bosque');
   const [currentGameModeId, setCurrentGameModeId] = useState<GameMode>('race');
@@ -133,26 +140,64 @@ export default function App({ playerName, courseName, onExit }: AppProps = {}) {
   const unlockingRegionId = unlocking?.regionId ?? null;
   const completedRegionName = unlocking?.fromRegionName;
 
+  // Gran Final "universo completado" (las 4 regiones con sus 5 niveles pasados). Igual que las
+  // celebraciones de isla: se deja pendiente al detectarlo en finishRound() y se muestra solo
+  // en el mapa, sin el modal de resultado ni una celebración de isla encima.
+  const {
+    active: finaleActive,
+    pending: finalePending,
+    trigger: triggerFinale,
+    open: openFinale,
+    dismiss: dismissFinale,
+    replay: replayFinale,
+  } = useUniverseFinale(
+    viewMode === 'map' && !session.gameOver && !session.gameWon && !unlockingRegionId,
+    () => playSfx('victory'),
+  );
+  const universeComplete = isUniverseComplete(regionsProgress);
+
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const submittedRef = useRef(false);
 
   const currentRegion = findRegion(currentRegionId);
   const currentGameMode = findGameMode(currentGameModeId);
 
+  // Refs con el estado de navegación actual, para leerlos desde callbacks estables.
+  const viewModeRef = useRef(viewMode);
+  viewModeRef.current = viewMode;
+  const currentRegionIdRef = useRef(currentRegionId);
+  currentRegionIdRef.current = currentRegionId;
+  const currentGameModeIdRef = useRef(currentGameModeId);
+  currentGameModeIdRef.current = currentGameModeId;
+  // ¿Ya se cargó el progreso al menos una vez? Distingue la carga INICIAL de un REFRESCO.
+  const hasLoadedProgressRef = useRef(false);
+
   const loadProgress = useCallback(async () => {
-    setProgressLoading(true);
+    // Solo la carga INICIAL bloquea la pantalla con "Cargando tu progreso...". Antes también
+    // lo hacía el refresco que sigue a cada ronda: reemplazaba TODA la interfaz y desmontaba
+    // la escena 3D (y el modal) justo cuando arrancaba la animación de victoria, y un fallo
+    // de red ahí tiraba el resultado del jugador a una pantalla de error.
+    const isRefresh = hasLoadedProgressRef.current;
+    if (!isRefresh) setProgressLoading(true);
     setProgressError(null);
     try {
       const { regions, totalXp: xp } = await fetchProgress();
+      hasLoadedProgressRef.current = true;
       setRegionsProgress(regions);
       setTotalXp(xp);
       setStats((prev) => ({ ...prev, totalXp: xp }));
+      setProgressStale(false);
       return regions;
     } catch (err) {
-      setProgressError(err instanceof Error ? err.message : 'No pudimos cargar tu progreso.');
+      if (isRefresh) {
+        // Ya hay progreso en pantalla y el jugador está en medio de una partida: se conserva.
+        setProgressStale(true);
+      } else {
+        setProgressError(err instanceof Error ? err.message : 'No pudimos cargar tu progreso.');
+      }
       return null;
     } finally {
-      setProgressLoading(false);
+      if (!isRefresh) setProgressLoading(false);
     }
   }, []);
 
@@ -174,6 +219,20 @@ export default function App({ playerName, courseName, onExit }: AppProps = {}) {
     // reconstrucción ocurre una sola vez, queda así hasta que algo vuelva a
     // cambiar region/modo/viewMode (por eso "salir y volver a entrar" lo
     // arreglaba). Por eso limpiamos session ya mismo, sin esperar la red.
+    // Rejugar el MISMO nivel desde el estado de juego no cambia región/modo/vista, así que el
+    // efecto 3D no reconstruiría la escena y podrían quedar restos de la ronda anterior
+    // (confeti, cámara de victoria, personajes; ver ADR-014 a ADR-016). Antes eso se evitaba
+    // "por accidente": el cargador de pantalla completa desmontaba el mundo al terminar cada
+    // ronda. Ahora, sin ese cargador, se fuerza una escena nueva de forma deliberada.
+    if (
+      viewModeRef.current === 'game' &&
+      currentRegionIdRef.current === regionId &&
+      currentGameModeIdRef.current === gameModeId
+    ) {
+      setWorldKey((k) => k + 1);
+    }
+    // Entrar a un nivel cierra el Gran Final si estaba abierto (si seguía pendiente, espera).
+    dismissFinale();
     setSession(emptySession(regionId, gameModeId));
     setCurrentRegionId(regionId);
     setCurrentGameModeId(gameModeId);
@@ -210,7 +269,7 @@ export default function App({ playerName, courseName, onExit }: AppProps = {}) {
     } finally {
       setLevelLoading(false);
     }
-  }, []);
+  }, [dismissFinale]);
 
   // Al elegir una región desde el mapa 3D: retoma el nivel más avanzado sin dominar
   const handleSelectRegion = useCallback(
@@ -263,6 +322,11 @@ export default function App({ playerName, courseName, onExit }: AppProps = {}) {
             // cuando el jugador está en el mapa (sin importar por qué ruta llegó).
             enqueueUnlock(newlyUnlockedIds, completedRegionNameSnapshot);
           }
+          // ¿Esta ronda completó el universo? Solo en la TRANSICIÓN: quien ya lo tenía
+          // completo y rejuega un nivel no vuelve a disparar el final.
+          if (didCompleteUniverse(regionsProgress, newRegions)) {
+            triggerFinale();
+          }
         }
         setSession((prev) => ({ ...prev, isSubmitting: false }));
       } catch (err) {
@@ -273,7 +337,7 @@ export default function App({ playerName, courseName, onExit }: AppProps = {}) {
         }));
       }
     },
-    [currentRegionId, currentGameModeId, currentRegion.name, regionsProgress, loadProgress, enqueueUnlock],
+    [currentRegionId, currentGameModeId, currentRegion.name, regionsProgress, loadProgress, enqueueUnlock, triggerFinale],
   );
 
   // Answer handler
@@ -555,8 +619,21 @@ export default function App({ playerName, courseName, onExit }: AppProps = {}) {
           }
         />
 
+        {progressStale && (
+          <div
+            role="status"
+            className="w-full rounded-xl border border-amber-500/40 bg-amber-950/40 text-amber-200 text-xs sm:text-sm px-4 py-2.5 flex items-center gap-2"
+          >
+            <AlertTriangle className="w-4 h-4 shrink-0" />
+            <span>
+              No pudimos actualizar tu progreso. Tu resultado ya se guardó; recarga la página para ver lo último.
+            </span>
+          </div>
+        )}
+
         <section className="relative w-full">
           <WorldViewport
+            key={worldKey}
             viewMode={viewMode}
             currentRegionId={currentRegionId}
             gameMode={currentGameModeId}
@@ -578,6 +655,11 @@ export default function App({ playerName, courseName, onExit }: AppProps = {}) {
             unlockingRegionId={unlockingRegionId}
             previousRegionName={completedRegionName}
             onDismissUnlock={handleDismissUnlock}
+            universeFinale={
+              finaleActive
+                ? { regions: regionsProgress, totalXp, onExplore: dismissFinale, onReplay: replayFinale }
+                : null
+            }
           />
         </section>
 
@@ -643,6 +725,15 @@ export default function App({ playerName, courseName, onExit }: AppProps = {}) {
                 <Play className="w-4 h-4" />
                 <span>Continuar jugando: {currentLevelInfo.name}</span>
               </button>
+              {universeComplete && (
+                <button
+                  onClick={openFinale}
+                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-400 hover:from-amber-300 hover:to-yellow-200 font-black text-sm text-slate-900 flex items-center gap-2 shadow-lg"
+                >
+                  <span aria-hidden="true">👑</span>
+                  <span>Ver el Gran Final</span>
+                </button>
+              )}
             </div>
           </div>
         )}
@@ -675,7 +766,8 @@ export default function App({ playerName, courseName, onExit }: AppProps = {}) {
         currentLevel={currentLevelInfo}
         onReplay={() => initLevelSession(currentRegionId, currentGameModeId)}
         onGoToMap={goToMap}
-        onNextLevel={session.gameWon ? handleNextLevel : undefined}
+        onNextLevel={session.gameWon && !finalePending ? handleNextLevel : undefined}
+        onShowFinale={session.gameWon && finalePending ? goToMap : undefined}
       />
 
       <GameModeTutorial gameMode={tutorialGameMode} onDismiss={handleDismissTutorial} />

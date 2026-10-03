@@ -21,7 +21,22 @@ interface IllustratedWorldViewportProps {
   gameWon?: boolean;
   gameOver?: boolean;
   onSelectRegion: (regionId: string) => void;
+  /** Gran Final "universo completado" activo: dibuja la Gran Estrella y los haces de luz sobre el mapa. */
+  universeFinaleActive?: boolean;
 }
+
+/**
+ * Centro visual de cada isla en el mapa 2D (viewBox 1000×600): su `translate(...)` más el
+ * centro de su plataforma (+80, +70). Los haces del Gran Final salen de aquí.
+ */
+const FINALE_2D_ISLAND_CENTERS: Record<string, [number, number]> = {
+  bosque: [210, 430],
+  montana: [430, 290],
+  ciudad: [680, 350],
+  castillo: [290, 140],
+};
+/** Dónde se dibuja la Gran Estrella en el mapa 2D. */
+const FINALE_2D_STAR: [number, number] = [500, 270];
 
 const OutcomeOverlay: React.FC<{
   gameWon?: boolean;
@@ -106,6 +121,7 @@ export const IllustratedWorldViewport: React.FC<IllustratedWorldViewportProps> =
   gameWon = false,
   gameOver = false,
   onSelectRegion,
+  universeFinaleActive,
 }) => {
   const currentRegion = REGIONS.find((w) => w.id === currentRegionId) || REGIONS[0];
 
@@ -189,6 +205,48 @@ export const IllustratedWorldViewport: React.FC<IllustratedWorldViewportProps> =
             strokeDasharray="9 9"
             opacity="0.7"
           />
+
+          {/* Gran Final: Gran Estrella central y un haz de luz desde cada región (motor de respaldo) */}
+          {universeFinaleActive && (
+            <g id="universe-grand-star-svg" className="animate-in fade-in zoom-in duration-700" pointerEvents="none">
+              {REGIONS.map((r) => {
+                const c = FINALE_2D_ISLAND_CENTERS[r.id];
+                if (!c) return null;
+                return (
+                  <line
+                    key={r.id}
+                    x1={c[0]}
+                    y1={c[1]}
+                    x2={FINALE_2D_STAR[0]}
+                    y2={FINALE_2D_STAR[1]}
+                    stroke={r.themeColor}
+                    strokeWidth="4"
+                    strokeDasharray="8 6"
+                    opacity="0.85"
+                  />
+                );
+              })}
+              <circle cx={FINALE_2D_STAR[0]} cy={FINALE_2D_STAR[1]} r="90" fill="#fef08a" opacity="0.25" className="animate-pulse" />
+              <circle cx={FINALE_2D_STAR[0]} cy={FINALE_2D_STAR[1]} r="65" fill="#fde047" opacity="0.4" />
+              <circle
+                cx={FINALE_2D_STAR[0]}
+                cy={FINALE_2D_STAR[1]}
+                r="115"
+                fill="none"
+                stroke="#fbbf24"
+                strokeWidth="3"
+                strokeDasharray="12 8"
+                opacity="0.75"
+              />
+              <path
+                d="M 500 200 L 518 250 L 570 250 L 528 280 L 545 330 L 500 300 L 455 330 L 472 280 L 430 250 L 482 250 Z"
+                fill="#fbbf24"
+                stroke="#ffffff"
+                strokeWidth="4"
+                strokeLinejoin="round"
+              />
+            </g>
+          )}
 
           {/* Floating Animated Clouds */}
           <g opacity="0.55">
