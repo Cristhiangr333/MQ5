@@ -358,15 +358,18 @@ function getCachedTexture(key: string, creator: () => THREE.CanvasTexture): THRE
 // en sesiones largas).
 function disposeObjectHierarchy(obj: THREE.Object3D) {
   obj.traverse((child) => {
-    if ((child as THREE.Mesh).isMesh) {
-      const mesh = child as THREE.Mesh;
-      if (mesh.geometry) {
-        mesh.geometry.dispose();
+    // Mesh, pero también Points (partículas), Line (guías del puente) y Sprite: antes solo
+    // se liberaban los Mesh y los demás quedaban huérfanos en la GPU en cada cambio de nivel.
+    // (Las texturas procedurales son compartidas y cacheadas: no se liberan aquí.)
+    const o = child as THREE.Mesh;
+    if (o.isMesh || (child as THREE.Points).isPoints || (child as THREE.Line).isLine || (child as THREE.Sprite).isSprite) {
+      if (o.geometry) {
+        o.geometry.dispose();
       }
-      if (Array.isArray(mesh.material)) {
-        mesh.material.forEach((m) => m.dispose());
-      } else if (mesh.material) {
-        mesh.material.dispose();
+      if (Array.isArray(o.material)) {
+        o.material.forEach((m) => m.dispose());
+      } else if (o.material) {
+        o.material.dispose();
       }
     }
   });
