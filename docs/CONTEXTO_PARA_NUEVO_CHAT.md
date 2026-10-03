@@ -75,7 +75,7 @@ src/
 supabase/
   migrations/0001 a 0011    -- el historial real de la base de datos (0010 y 0011 esperan ser aplicadas por el usuario)
   rollbacks/*.down.sql      -- cómo deshacer cada migración
-docs/DECISIONS.md           -- los 19 ADRs, la fuente de verdad del "por qué"
+docs/DECISIONS.md           -- los 20 ADRs, la fuente de verdad del "por qué"
 ```
 
 `ThreeWorldCanvas.tsx` es, por lejos, el archivo más denso y más propenso a
@@ -144,6 +144,7 @@ merges fueron limpios hasta ahora, pero:
   rompió el despliegue por caché de esquema de PostgREST, y se revirtió todo.
 - **El loop de juego ahora SÍ tiene prueba de integración** (`src/test/gameFlow.test.tsx`: responder, ganar/perder, guardar, refrescar, modal, celebración de isla), pero con el lienzo 3D simulado (jsdom no tiene WebGL). Lo que sigue sin cubrirse es el *aspecto* de las animaciones 3D: eso solo se ve en un navegador.
 - **Regla de islas (ADR-018):** una isla se abre al COMPLETAR la anterior, no por XP. Migraciones 0010 y 0011 sin aplicar en producción; antes de la 0011 correr `supabase/checks/0011_impact_check.sql`.
+- **Gran Final "universo completado" (ADR-020):** integrado desde el prototipo, sin marcas ajenas. Cinemática 3D y cámara pensadas para 5 islas del prototipo: falta verificar su encuadre en un navegador con las 4 regiones. `vitest` solo recoge `*.test.tsx` (un `.test.ts` se ignora en silencio).
 - **Reset de visuales al rejugar (ADR-016/019):** "Jugar de nuevo" ahora fuerza una escena 3D nueva (`worldKey`). Antes dependía de un cargador de pantalla completa que desmontaba todo al terminar cada ronda (ya eliminado, ADR-019). Falta VERLO en un navegador.
 - **Migración `0009` (panel docente) ya fue corrida por el usuario en su
   Supabase real** y confirmada funcionando. Cualquier migración nueva que se
