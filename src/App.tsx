@@ -598,6 +598,10 @@ export default function App({ playerName, courseName, onExit }: AppProps = {}) {
               </button>
             </div>
           ) : (
+            // En celular el panel queda anclado al borde inferior de la pantalla:
+            // los botones de respuesta siempre se ven sin tener que bajar, y la
+            // escena 3D sigue visible arriba. En tablet/escritorio (sm+) no cambia.
+            <div className="max-sm:sticky max-sm:bottom-0 max-sm:z-40 max-sm:max-h-[70dvh] max-sm:overflow-y-auto max-sm:pb-[env(safe-area-inset-bottom)]">
             <QuestionPanel
               question={activeQuestion}
               timeLeft={session.timeLeft}
@@ -610,6 +614,7 @@ export default function App({ playerName, courseName, onExit }: AppProps = {}) {
               onSelectOption={(opt) => handleSelectOption(typeof opt === 'number' ? opt : Number(opt))}
               gameMode={currentGameModeId}
             />
+            </div>
           )
         ) : (
           <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-6 text-center backdrop-blur-md">

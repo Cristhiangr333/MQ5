@@ -101,7 +101,7 @@ export const QuestionPanel: React.FC<QuestionPanelProps> = ({
   };
 
   return (
-    <div className="bg-slate-900/95 border border-slate-800/80 rounded-2xl p-4 sm:p-6 shadow-xl backdrop-blur-md flex flex-col items-center text-center relative overflow-hidden">
+    <div className="bg-slate-900/95 border border-slate-800/80 rounded-2xl p-3 sm:p-6 shadow-xl backdrop-blur-md flex flex-col items-center text-center relative overflow-clip">
       {/* Top Metadata Badges */}
       <div className="flex flex-wrap items-center justify-center gap-2 mb-2">
         <span className="inline-flex items-center gap-1 bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs font-bold px-3 py-1 rounded-full">
@@ -112,7 +112,7 @@ export const QuestionPanel: React.FC<QuestionPanelProps> = ({
         {getOperationBadge()}
 
         <span className="inline-flex items-center gap-1 bg-slate-800 text-slate-300 text-xs font-semibold px-2.5 py-1 rounded-full border border-slate-700">
-          Nivel {question.difficulty} · 3º Grado
+          {question.difficulty > 3 ? 'Reto avanzado' : `Nivel ${question.difficulty}`} · 3º Grado
         </span>
 
         {combo >= 2 && (
@@ -230,7 +230,7 @@ export const QuestionPanel: React.FC<QuestionPanelProps> = ({
         className={`w-full max-w-xl mt-3 ${
           hasLongTextOptions
             ? 'flex flex-col gap-2.5'
-            : 'grid grid-cols-1 sm:grid-cols-3 gap-3 max-w-lg'
+            : 'grid grid-cols-3 gap-2 sm:gap-3 max-w-lg max-sm:sticky max-sm:bottom-0 max-sm:z-10 max-sm:bg-slate-900 max-sm:py-1'
         }`}
       >
         {question.options.map((option, idx) => {
@@ -260,7 +260,7 @@ export const QuestionPanel: React.FC<QuestionPanelProps> = ({
               className={`rounded-xl border-2 transition-all duration-150 flex items-center relative cursor-pointer active:scale-95 disabled:cursor-not-allowed ${
                 hasLongTextOptions
                   ? 'p-3 text-left font-sans text-xs sm:text-sm font-semibold justify-start gap-2.5'
-                  : 'p-4 justify-center font-mono text-xl sm:text-2xl font-bold'
+                  : 'p-3 sm:p-4 justify-center font-mono text-xl sm:text-2xl font-bold'
               } ${btnStyles}`}
             >
               <span
