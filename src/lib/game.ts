@@ -1,9 +1,25 @@
 import { supabase } from './supabase';
 import type { GameMode, MathQuestion, RegionProgress, RoundAnswer } from '../types';
 
-function shuffle<T>(arr: T[]): T[] {
-  return [...arr].sort(() => Math.random() - 0.5);
+/**
+ * Mezcla uniforme (Fisher-Yates). Antes era `sort(() => Math.random() - 0.5)`, que
+ * NO es uniforme: medido con 300.000 mezclas, la respuesta correcta caía en la
+ * posición A el 44 % de las veces, en B el 19 % y en C el 38 %, y algunas preguntas
+ * salían hasta 2,5 veces más que otras.
+ */
+export function shuffle<T>(arr: T[]): T[] {
+  const out = [...arr];
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
 }
+
+// Tope de filas que se piden por nivel. Antes 200: la Resta (niveles 4 y 5) tiene
+// 279 y 270 preguntas y las sobrantes casi nunca salían. El banco más grande hoy
+// es 279; PostgREST corta en 1000 por defecto, así que 500 deja margen sin riesgo.
+const QUESTION_POOL_LIMIT = 500;
 
 function questionKindLabel(kind: string): string {
   if (kind === 'missing_first') return 'Falta el primer número';
@@ -178,7 +194,7 @@ export async function fetchQuestionsForLevel(
     .in('kind', gm.question_kinds)
     .gte('difficulty', difficultyMin)
     .lte('difficulty', difficultyMax)
-    .limit(200);
+    .limit(QUESTION_POOL_LIMIT);
   if (questionsError) throw questionsError;
 
   const pool = shuffle((rows ?? []) as QuestionRow[]).slice(0, gm.questions_per_round);

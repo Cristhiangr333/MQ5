@@ -75,3 +75,30 @@ describe('fetchQuestionsForLevel · overrides de region_games (migración 0012)'
     expect(questions[0].options.slice().sort()).toEqual([61, 71, 60].sort());
   });
 });
+
+describe('shuffle (mezcla uniforme)', () => {
+  it('la respuesta correcta cae ~33 % en cada posición (antes 44/19/38)', async () => {
+    const { shuffle } = await freshModule();
+    const N = 30000;
+    const pos = [0, 0, 0];
+    for (let i = 0; i < N; i++) pos[shuffle(['c', 'x', 'y']).indexOf('c')]++;
+    for (const p of pos) expect(p / N).toBeGreaterThan(0.31), expect(p / N).toBeLessThan(0.355);
+  });
+
+  it('conserva los elementos y no muta el arreglo original', async () => {
+    const { shuffle } = await freshModule();
+    const src = [1, 2, 3, 4, 5, 6];
+    const out = shuffle(src);
+    expect(src).toEqual([1, 2, 3, 4, 5, 6]);
+    expect([...out].sort()).toEqual(src);
+  });
+
+  it('todas las preguntas de un banco tienen la misma probabilidad de salir', async () => {
+    const { shuffle } = await freshModule();
+    const bank = 36, k = 5, M = 20000, hit = Array(bank).fill(0);
+    const ids = [...Array(bank).keys()];
+    for (let i = 0; i < M; i++) shuffle(ids).slice(0, k).forEach((x) => hit[x]++);
+    const ideal = (k / bank) * M;
+    for (const h of hit) expect(Math.abs(h - ideal) / ideal).toBeLessThan(0.12);
+  });
+});
