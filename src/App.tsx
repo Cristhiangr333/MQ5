@@ -158,6 +158,21 @@ export default function App({ playerName, courseName, onExit }: AppProps = {}) {
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const submittedRef = useRef(false);
+  // Protecciones contra carreras de estado (ver src/test/roundRaces.test.tsx):
+  //  - roundTokenRef: cambia cada vez que se arranca un nivel. Lo que llegue tarde de un
+  //    nivel anterior (respuesta de red lenta, espera de 1,4 s) se descarta al comparar.
+  //  - answerLockRef: una pregunta solo se contesta una vez, aunque lleguen dos eventos
+  //    (tecla repetida, o tiempo agotado + clic) antes de que React repinte.
+  //  - advanceTimeoutRef: la espera de 1,4 s hacia la siguiente pregunta, cancelable.
+  const roundTokenRef = useRef(0);
+  const answerLockRef = useRef(false);
+  const advanceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (advanceTimeoutRef.current) clearTimeout(advanceTimeoutRef.current);
+    },
+    [],
+  );
 
   const currentRegion = findRegion(currentRegionId);
   const currentGameMode = findGameMode(currentGameModeId);
@@ -233,6 +248,13 @@ export default function App({ playerName, courseName, onExit }: AppProps = {}) {
     }
     // Entrar a un nivel cierra el Gran Final si estaba abierto (si seguía pendiente, espera).
     dismissFinale();
+    // Nueva ronda: invalida lo pendiente de la anterior (espera de 1,4 s, carga lenta).
+    const roundToken = ++roundTokenRef.current;
+    answerLockRef.current = false;
+    if (advanceTimeoutRef.current) {
+      clearTimeout(advanceTimeoutRef.current);
+      advanceTimeoutRef.current = null;
+    }
     setSession(emptySession(regionId, gameModeId));
     setCurrentRegionId(regionId);
     setCurrentGameModeId(gameModeId);
@@ -243,6 +265,8 @@ export default function App({ playerName, courseName, onExit }: AppProps = {}) {
     submittedRef.current = false;
     try {
       const { questions, config } = await fetchQuestionsForLevel(regionId, gameModeId);
+      // Si mientras tanto el niño pidió OTRO nivel, esta respuesta ya no es de nadie.
+      if (roundToken !== roundTokenRef.current) return;
       if (questions.length === 0) {
         setLevelError('Todavía no hay preguntas cargadas para este nivel. Avísale a tu docente.');
         setLevelLoading(false);
@@ -265,9 +289,10 @@ export default function App({ playerName, courseName, onExit }: AppProps = {}) {
       setTutorialGameMode(isFirstTimeForThisMode ? gameModeId : null);
       setStats((prev) => ({ ...prev, lives: config.lives, maxLives: config.lives, combo: 0, score: 0 }));
     } catch (err) {
+      if (roundToken !== roundTokenRef.current) return; // error de un nivel que ya no se está jugando
       setLevelError(err instanceof Error ? err.message : 'No pudimos cargar las preguntas de este nivel.');
     } finally {
-      setLevelLoading(false);
+      if (roundToken === roundTokenRef.current) setLevelLoading(false);
     }
   }, [dismissFinale]);
 
@@ -347,6 +372,8 @@ export default function App({ playerName, courseName, onExit }: AppProps = {}) {
 
       const currentQ = session.questions[session.activeQuestionIndex];
       if (!currentQ) return;
+      if (answerLockRef.current) return; // ya se contestó esta pregunta (evento duplicado)
+      answerLockRef.current = true;
 
       const correct = option !== null && option === currentQ.correct;
       const submittedAnswer = option ?? TIMEOUT_SENTINEL_ANSWER;
@@ -415,7 +442,11 @@ export default function App({ playerName, courseName, onExit }: AppProps = {}) {
         answers: updatedAnswers,
       }));
 
-      setTimeout(() => {
+      const roundToken = roundTokenRef.current;
+      advanceTimeoutRef.current = setTimeout(() => {
+        advanceTimeoutRef.current = null;
+        // Si el niño reinició o cambió de nivel durante la espera, esto ya no aplica.
+        if (roundToken !== roundTokenRef.current) return;
         setSession((prev) => {
           const nextIndex = prev.activeQuestionIndex + 1;
           const isOutLives = !correct && stats.lives - 1 <= 0;
@@ -433,6 +464,7 @@ export default function App({ playerName, courseName, onExit }: AppProps = {}) {
             return { ...prev, gameWon: true, isTimerActive: false };
           }
 
+          answerLockRef.current = false;
           return {
             ...prev,
             activeQuestionIndex: nextIndex,
