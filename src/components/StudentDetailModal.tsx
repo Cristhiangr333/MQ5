@@ -19,7 +19,7 @@ interface StudentDetailModalProps {
   onClose: () => void;
 }
 
-const DIFFICULTY_LABEL: Record<number, string> = { 1: 'Fácil', 2: 'Medio', 3: 'Difícil' };
+const DIFFICULTY_LABEL: Record<number, string> = { 1: 'Fácil', 2: 'Medio', 3: 'Difícil', 4: 'Div. 3 cifras ÷ 1', 5: 'Div. 3 cifras ÷ 2', 6: 'Div. 4 cifras ÷ 2' };
 
 /** "hace 2 días", "hoy" a partir de un timestamp -- versión corta para la lista de actividad. */
 function shortTimeAgo(iso: string): string {
@@ -247,7 +247,10 @@ export function StudentDetailModal({ studentId, studentName, onClose }: StudentD
                     if (regionDifficulty.length === 0) return null;
                     return (
                       <div className="mt-2 flex flex-wrap gap-2">
-                        {([1, 2, 3] as const).map((level) => {
+                        {([1, 2, 3, 4, 5, 6] as const)
+                          // 4-6 solo existen en la División: se muestran únicamente si hay datos.
+                          .filter((level) => level <= 3 || regionDifficulty.some((r) => r.difficulty === level))
+                          .map((level) => {
                           const d = regionDifficulty.find((r) => r.difficulty === level);
                           const pct = d && d.questions_total > 0 ? Math.round((100 * d.correct_count) / d.questions_total) : null;
                           return (

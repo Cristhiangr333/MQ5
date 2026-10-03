@@ -88,6 +88,38 @@ interface GameModeRow {
 let gameModesCache: Map<GameMode, GameModeRow> | null = null;
 let gameModesPromise: Promise<Map<GameMode, GameModeRow>> | null = null;
 
+// Migración 0012: `region_games` puede traer, para una región + juego concreto,
+// un rango de dificultad y un tiempo propios (hoy solo las divisiones largas del
+// Castillo). Se cargan junto a `game_modes`, en paralelo, y también se cachean.
+// Si la 0012 todavía no está aplicada en Supabase (las columnas no existen) o la
+// consulta falla, se ignoran los overrides y todo se comporta como antes.
+interface RegionGameOverride {
+  difficulty_min: number | null;
+  difficulty_max: number | null;
+  seconds_per_question: number | null;
+}
+let overridesCache: Map<string, RegionGameOverride> | null = null;
+
+async function loadRegionGameOverrides(): Promise<Map<string, RegionGameOverride>> {
+  if (overridesCache) return overridesCache;
+  const map = new Map<string, RegionGameOverride>();
+  try {
+    const { data, error } = await supabase
+      .from('region_games')
+      .select('region_id, game_mode_id, difficulty_min, difficulty_max, seconds_per_question');
+    if (error) return map; // sin 0012: no se cachea, se reintenta en el próximo nivel
+    for (const row of (data ?? []) as Array<RegionGameOverride & { region_id: string; game_mode_id: string }>) {
+      if (row.difficulty_min != null || row.seconds_per_question != null) {
+        map.set(`${row.region_id}:${row.game_mode_id}`, row);
+      }
+    }
+    overridesCache = map;
+  } catch {
+    // red caída: mismo criterio, se usa el comportamiento por defecto
+  }
+  return map;
+}
+
 async function loadGameModes(): Promise<Map<GameMode, GameModeRow>> {
   if (gameModesCache) return gameModesCache;
   if (!gameModesPromise) {
@@ -129,9 +161,14 @@ export async function fetchQuestionsForLevel(
   regionId: string,
   gameModeId: GameMode,
 ): Promise<{ questions: MathQuestion[]; config: LevelConfig }> {
-  const gameModes = await loadGameModes();
+  const [gameModes, overrides] = await Promise.all([loadGameModes(), loadRegionGameOverrides()]);
   const gm = gameModes.get(gameModeId);
   if (!gm) throw new Error(`No encontramos la configuración del modo de juego "${gameModeId}".`);
+
+  const override = overrides.get(`${regionId}:${gameModeId}`);
+  const difficultyMin = override?.difficulty_min ?? gm.difficulty_min;
+  const difficultyMax = override?.difficulty_max ?? gm.difficulty_max;
+  const secondsPerQuestion = override?.seconds_per_question ?? gm.seconds_per_question;
 
   const { data: rows, error: questionsError } = await supabase
     .from('questions')
@@ -139,8 +176,8 @@ export async function fetchQuestionsForLevel(
     .eq('region_id', regionId)
     .eq('is_active', true)
     .in('kind', gm.question_kinds)
-    .gte('difficulty', gm.difficulty_min)
-    .lte('difficulty', gm.difficulty_max)
+    .gte('difficulty', difficultyMin)
+    .lte('difficulty', difficultyMax)
     .limit(200);
   if (questionsError) throw questionsError;
 
@@ -159,7 +196,7 @@ export async function fetchQuestionsForLevel(
     questions,
     config: {
       questionsPerRound: gm.questions_per_round,
-      secondsPerQuestion: gm.seconds_per_question,
+      secondsPerQuestion,
       lives: gm.lives,
     },
   };

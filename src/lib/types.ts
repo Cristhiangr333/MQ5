@@ -60,10 +60,10 @@ export interface StudentLevelDetailRow {
   region_required_xp?: number;
 }
 
-/** Fila de get_student_difficulty_breakdown(): precisión por región y dificultad (1-3). */
+/** Fila de get_student_difficulty_breakdown(): precisión por región y dificultad (1-3; 4-6 = divisiones largas, migración 0012). */
 export interface StudentDifficultyRow {
   region_id: string;
-  difficulty: 1 | 2 | 3;
+  difficulty: 1 | 2 | 3 | 4 | 5 | 6;
   correct_count: number;
   questions_total: number;
 }
