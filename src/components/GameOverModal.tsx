@@ -16,6 +16,8 @@ interface GameOverModalProps {
   onReplay: () => void;
   onGoToMap: () => void;
   onNextLevel?: () => void;
+  /** Si viene, esta victoria completó el universo: ofrece ver el Gran Final (lleva al mapa). */
+  onShowFinale?: () => void;
 }
 
 export const GameOverModal: React.FC<GameOverModalProps> = ({
@@ -31,6 +33,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
   onReplay,
   onGoToMap,
   onNextLevel,
+  onShowFinale,
 }) => {
   useEffect(() => {
     if (isOpen && isWon) {
@@ -112,6 +115,16 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
 
         {/* Buttons */}
         <div className="space-y-2.5">
+          {isWon && onShowFinale && (
+            <button
+              onClick={onShowFinale}
+              className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-400 hover:from-amber-300 hover:to-yellow-200 text-slate-900 font-black text-sm sm:text-base flex items-center justify-center gap-2 shadow-[0_0_24px_rgba(251,191,36,0.45)] transition-colors"
+            >
+              <span aria-hidden="true">👑</span>
+              <span>¡Ver el Gran Final!</span>
+            </button>
+          )}
+
           {isWon && onNextLevel && (
             <button
               onClick={onNextLevel}

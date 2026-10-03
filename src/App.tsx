@@ -12,6 +12,8 @@ import { GameModeTutorial } from './components/GameModeTutorial';
 import { PauseModal } from './components/PauseModal';
 import { detectNewlyUnlocked } from './lib/unlocks';
 import { useUnlockCelebrations } from './lib/useUnlockCelebrations';
+import { didCompleteUniverse, isUniverseComplete } from './lib/universe';
+import { useUniverseFinale } from './lib/useUniverseFinale';
 import { useDelayedFlag } from './lib/useDelayedFlag';
 import { Play, Compass, LogOut, Loader2, AlertTriangle } from 'lucide-react';
 
@@ -138,6 +140,22 @@ export default function App({ playerName, courseName, onExit }: AppProps = {}) {
   const unlockingRegionId = unlocking?.regionId ?? null;
   const completedRegionName = unlocking?.fromRegionName;
 
+  // Gran Final "universo completado" (las 4 regiones con sus 5 niveles pasados). Igual que las
+  // celebraciones de isla: se deja pendiente al detectarlo en finishRound() y se muestra solo
+  // en el mapa, sin el modal de resultado ni una celebración de isla encima.
+  const {
+    active: finaleActive,
+    pending: finalePending,
+    trigger: triggerFinale,
+    open: openFinale,
+    dismiss: dismissFinale,
+    replay: replayFinale,
+  } = useUniverseFinale(
+    viewMode === 'map' && !session.gameOver && !session.gameWon && !unlockingRegionId,
+    () => playSfx('victory'),
+  );
+  const universeComplete = isUniverseComplete(regionsProgress);
+
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const submittedRef = useRef(false);
 
@@ -213,6 +231,8 @@ export default function App({ playerName, courseName, onExit }: AppProps = {}) {
     ) {
       setWorldKey((k) => k + 1);
     }
+    // Entrar a un nivel cierra el Gran Final si estaba abierto (si seguía pendiente, espera).
+    dismissFinale();
     setSession(emptySession(regionId, gameModeId));
     setCurrentRegionId(regionId);
     setCurrentGameModeId(gameModeId);
@@ -249,7 +269,7 @@ export default function App({ playerName, courseName, onExit }: AppProps = {}) {
     } finally {
       setLevelLoading(false);
     }
-  }, []);
+  }, [dismissFinale]);
 
   // Al elegir una región desde el mapa 3D: retoma el nivel más avanzado sin dominar
   const handleSelectRegion = useCallback(
@@ -302,6 +322,11 @@ export default function App({ playerName, courseName, onExit }: AppProps = {}) {
             // cuando el jugador está en el mapa (sin importar por qué ruta llegó).
             enqueueUnlock(newlyUnlockedIds, completedRegionNameSnapshot);
           }
+          // ¿Esta ronda completó el universo? Solo en la TRANSICIÓN: quien ya lo tenía
+          // completo y rejuega un nivel no vuelve a disparar el final.
+          if (didCompleteUniverse(regionsProgress, newRegions)) {
+            triggerFinale();
+          }
         }
         setSession((prev) => ({ ...prev, isSubmitting: false }));
       } catch (err) {
@@ -312,7 +337,7 @@ export default function App({ playerName, courseName, onExit }: AppProps = {}) {
         }));
       }
     },
-    [currentRegionId, currentGameModeId, currentRegion.name, regionsProgress, loadProgress, enqueueUnlock],
+    [currentRegionId, currentGameModeId, currentRegion.name, regionsProgress, loadProgress, enqueueUnlock, triggerFinale],
   );
 
   // Answer handler
@@ -630,6 +655,11 @@ export default function App({ playerName, courseName, onExit }: AppProps = {}) {
             unlockingRegionId={unlockingRegionId}
             previousRegionName={completedRegionName}
             onDismissUnlock={handleDismissUnlock}
+            universeFinale={
+              finaleActive
+                ? { regions: regionsProgress, totalXp, onExplore: dismissFinale, onReplay: replayFinale }
+                : null
+            }
           />
         </section>
 
@@ -690,6 +720,15 @@ export default function App({ playerName, courseName, onExit }: AppProps = {}) {
                 <Play className="w-4 h-4" />
                 <span>Continuar jugando: {currentLevelInfo.name}</span>
               </button>
+              {universeComplete && (
+                <button
+                  onClick={openFinale}
+                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-400 hover:from-amber-300 hover:to-yellow-200 font-black text-sm text-slate-900 flex items-center gap-2 shadow-lg"
+                >
+                  <span aria-hidden="true">👑</span>
+                  <span>Ver el Gran Final</span>
+                </button>
+              )}
             </div>
           </div>
         )}
@@ -722,7 +761,8 @@ export default function App({ playerName, courseName, onExit }: AppProps = {}) {
         currentLevel={currentLevelInfo}
         onReplay={() => initLevelSession(currentRegionId, currentGameModeId)}
         onGoToMap={goToMap}
-        onNextLevel={session.gameWon ? handleNextLevel : undefined}
+        onNextLevel={session.gameWon && !finalePending ? handleNextLevel : undefined}
+        onShowFinale={session.gameWon && finalePending ? goToMap : undefined}
       />
 
       <GameModeTutorial gameMode={tutorialGameMode} onDismiss={handleDismissTutorial} />
